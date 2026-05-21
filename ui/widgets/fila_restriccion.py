@@ -13,8 +13,8 @@ COLOR_ENTRY   = "#0f1923"
 COLOR_FOCUS   = "#3d8bcd"
 COLOR_ELIMINAR = "#c0392b"
 COLOR_ELIM_HOVER = "#e74c3c"
-FONT_MONO     = ("Consolas", 11)
-FONT_LABEL    = ("Segoe UI", 9)
+FONT_MONO     = ("Consolas", 12)
+FONT_LABEL    = ("Segoe UI", 10)
 
 
 class FilaRestriccion(tk.Frame):
@@ -34,7 +34,7 @@ class FilaRestriccion(tk.Frame):
         # Número de restricción
         self._lbl_num = tk.Label(
             self, text=f"R{numero}", width=3,
-            font=("Consolas", 10, "bold"),
+            font=("Consolas", 11, "bold"),
             bg=bg, fg=FG_LABEL
         )
         self._lbl_num.pack(side="left", padx=(10, 4))
@@ -102,7 +102,7 @@ class FilaRestriccion(tk.Frame):
         # Botón eliminar
         self._btn_elim = tk.Button(
             self, text="✕", width=2,
-            font=("Segoe UI", 10, "bold"),
+            font=("Segoe UI", 11, "bold"),
             bg=COLOR_ELIMINAR, fg="white",
             activebackground=COLOR_ELIM_HOVER,
             activeforeground="white",

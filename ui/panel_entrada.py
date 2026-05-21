@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import messagebox
 from core.modelo import Restriccion, TipoRestriccion
 from ui.widgets.fila_restriccion import FilaRestriccion
-from typing import Callable
+from typing import Callable, Optional
 
 
 # Paleta
@@ -22,9 +22,9 @@ COLOR_BTN_RESOLVER  = "#1a5276"
 COLOR_BTN_RESOL_HOVER = "#2471a3"
 FONT_TITULO   = ("Georgia", 16, "bold")
 FONT_SUBTIT   = ("Georgia", 11, "italic")
-FONT_LABEL    = ("Segoe UI", 9)
+FONT_LABEL    = ("Segoe UI", 11)
 FONT_MONO     = ("Consolas", 11)
-FONT_BTN      = ("Segoe UI", 10, "bold")
+FONT_BTN      = ("Segoe UI", 12, "bold")
 
 
 def _hover(widget, color_normal, color_hover):
@@ -42,7 +42,7 @@ class PanelEntrada(tk.Frame):
       - Botón Resolver
     """
 
-    def __init__(self, parent, callback_resolver: Callable = None, **kwargs):
+    def __init__(self, parent, callback_resolver: Optional[Callable] = None, **kwargs):
         kwargs.setdefault("bg", BG_PANEL)
         super().__init__(parent, **kwargs)
 
@@ -79,7 +79,7 @@ class PanelEntrada(tk.Frame):
 
         tk.Label(
             outer, text="FUNCIÓN OBJETIVO",
-            font=("Segoe UI", 8, "bold"),
+            font=("Segoe UI", 10, "bold"),
             bg=BG_PANEL, fg=FG_LABEL
         ).pack(anchor="w")
 
@@ -130,7 +130,7 @@ class PanelEntrada(tk.Frame):
         tk.Label(
             inner,
             text='Ejemplo: "2x1 + 3x2"  o  "5x1 - x2 + 4x3"',
-            font=("Segoe UI", 8), bg=BG_SECCION, fg="#4a6f8a"
+            font=("Segoe UI", 10), bg=BG_SECCION, fg="#4a6f8a"
         ).pack(anchor="w", pady=(4, 0))
 
     def _construir_seccion_restricciones(self):
@@ -139,7 +139,7 @@ class PanelEntrada(tk.Frame):
 
         tk.Label(
             outer, text="RESTRICCIONES",
-            font=("Segoe UI", 8, "bold"),
+            font=("Segoe UI", 10, "bold"),
             bg=BG_PANEL, fg=FG_LABEL
         ).pack(anchor="w")
 
@@ -159,7 +159,7 @@ class PanelEntrada(tk.Frame):
                               ("Tipo", 18), ("Lado derecho", 10), ("", 3)]:
             tk.Label(
                 cab, text=texto, width=ancho,
-                font=("Segoe UI", 8, "bold"),
+                font=("Segoe UI", 10, "bold"),
                 bg=BG_HEADER, fg=FG_LABEL, anchor="w"
             ).pack(side="left", padx=(10 if texto == "#" else 2, 2))
 

@@ -77,6 +77,9 @@ class ConstructorPrimerIteracion:
         # Combinar tableau: fila Z + matriz de restricciones
         tableau = [fila_z] + matriz_restricciones
         
+        # El término independiente para Z es siempre 0 (en la forma Z - ... = 0)
+        terminos_ind_completo = [0.0] + terminos_ind
+        
         # Construir lista completa de todas las variables en orden
         nombres_variables = self._construir_lista_variables_todas()
         
@@ -85,7 +88,7 @@ class ConstructorPrimerIteracion:
             numero_iteracion=1,
             tableau=tableau,
             variables_basicas=variables_basicas,
-            terminos_independientes=terminos_ind,
+            terminos_independientes=terminos_ind_completo,
             nombres_variables_todas=nombres_variables
         )
         

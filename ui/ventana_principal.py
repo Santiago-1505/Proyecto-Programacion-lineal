@@ -15,15 +15,15 @@ class VentanaPrincipal(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Programación Lineal - Método Gran M")
-        self.geometry("1100x680")
-        self.minsize(900, 560)
+        self.geometry("1700x900")
+        self.minsize(1000, 700)
         self.configure(bg=BG_VENTANA)
 
         # Centrar ventana en pantalla
         self.update_idletasks()
-        x = (self.winfo_screenwidth()  - 1100) // 2
-        y = (self.winfo_screenheight() - 680)  // 2
-        self.geometry(f"1100x680+{x}+{y}")
+        x = (self.winfo_screenwidth()  - 1700) // 2
+        y = (self.winfo_screenheight() - 900)  // 2
+        self.geometry(f"1700x900+{x}+{y}")
 
         # Estado del solucionador
         self._solucionador = None
