@@ -16,15 +16,23 @@
         system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
+					dev-script = pkgs.writeShellScriptBin "dev" ''
+            python -m watchfiles \
+              --ignore-paths __pycache__ \
+              "python main.py"
+          '';
         in
         {
           default = pkgs.mkShell {
             packages = with pkgs; [
               (pkgs.python3.withPackages (ps: with ps; [
                 tkinter
+								watchfiles
+								ipykernel
               ]))
               ruff
               basedpyright
+							dev-script
             ];
 
           };
