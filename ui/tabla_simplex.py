@@ -94,10 +94,10 @@ class TablaSimplex(ttk.Treeview):
         self.tag_configure("evenrow", background=BG_TABLA)
         
         # Tag especial para valores de M
-        self.tag_configure("valor_m", background=COLOR_M, foreground="black", font=("Consolas", 11, "bold"))
+        #self.tag_configure("valor_m", background=COLOR_M, foreground="white", font=("Consolas", 11, "bold"))
         
         # Tag especial para término independiente
-        self.tag_configure("termino_ind", background=COLOR_BASICA, foreground=FG_TEXTO, font=("Consolas", 11, "bold"))
+        #self.tag_configure("termino_ind", background=COLOR_BASICA, foreground=FG_TEXTO, font=("Consolas", 11, "bold"))
     
     def cargar_iteracion(self, iteracion: Iteracion):
         """

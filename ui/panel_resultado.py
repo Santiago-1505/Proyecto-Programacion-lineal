@@ -45,7 +45,7 @@ class PanelResultado(tk.Frame):
         
         self._lbl_titulo = tk.Label(
             header,
-            text="Tableau Simplex - Método de la Gran M",
+            text="Tabla Simplex - Método de la Gran M",
             font=("Georgia", 16, "bold"),
             bg=BG_HEADER,
             fg=FG_TEXTO
