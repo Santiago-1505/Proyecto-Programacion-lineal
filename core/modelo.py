@@ -1,5 +1,5 @@
 from enum import Enum
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 class TipoRestriccion(Enum):
@@ -54,9 +54,9 @@ class Restriccion:
 
 class TipoVariable(Enum):
     DECISION = "x"
-    HOLGURA = "h"
-    EXCESO = "e"
-    ARTIFICIAL = "a"
+    HOLGURA = "S"
+    EXCESO = "E"
+    ARTIFICIAL = "A"
 
 @dataclass
 class Variable:
@@ -89,3 +89,33 @@ class Termino:
 
     def __repr__(self):
         return str(self)
+
+
+@dataclass
+class Iteracion:
+    """
+    Representa una iteración del método simplex.
+    
+    Atributos:
+        numero_iteracion: Número secuencial de la iteración
+        tableau: Matriz que incluye restricciones + fila Z
+        variables_basicas: Lista de Variable que forman la base actual
+        terminos_independientes: Vector b (lado derecho)
+        nombres_variables_todas: Lista ordenada de Variable para referencia
+    """
+    numero_iteracion: int
+    tableau: list[list]  # incluyendo fila Z como primera fila (puede contener float o str "M")
+    variables_basicas: list[Variable]
+    terminos_independientes: list[float]  # vector b
+    nombres_variables_todas: list[Variable] = field(default_factory=list)
+    
+    def __str__(self):
+        return f"Iteración {self.numero_iteracion}"
+    
+    def obtener_num_restricciones(self) -> int:
+        """Retorna cantidad de filas de restricciones (sin contar Z)."""
+        return len(self.tableau) - 1
+    
+    def obtener_num_variables(self) -> int:
+        """Retorna cantidad total de columnas."""
+        return len(self.tableau[0]) if self.tableau else 0
