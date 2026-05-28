@@ -26,6 +26,12 @@ COLOR_BORDE = "#2d4a6e"
 COLOR_M = "#d4a574"
 COLOR_BASICA = "#1a6b3c"
 
+# Colores para resaltado de pivotaje
+COLOR_PIVOTE_COLUMNA = "#2a7d3e"      # Verde para columna que entra
+COLOR_PIVOTE_FILA = "#8b7d2e"         # Amarillo para fila que sale
+COLOR_RAZON_MINIMA = "#a81e3d"        # Rojo para razón mínima
+COLOR_ELEMENTO_PIVOTE = "#d4820a"     # Naranja para elemento pivote
+
 
 class TablaSimplex(ttk.Treeview):
     """
@@ -93,11 +99,11 @@ class TablaSimplex(ttk.Treeview):
         self.tag_configure("oddrow", background=BG_ALT_ROW)
         self.tag_configure("evenrow", background=BG_TABLA)
         
-        # Tag especial para valores de M
-        #self.tag_configure("valor_m", background=COLOR_M, foreground="white", font=("Consolas", 11, "bold"))
-        
-        # Tag especial para término independiente
-        #self.tag_configure("termino_ind", background=COLOR_BASICA, foreground=FG_TEXTO, font=("Consolas", 11, "bold"))
+        # Tags para resaltado de pivotaje
+        self.tag_configure("pivote_columna", background=COLOR_PIVOTE_COLUMNA, foreground="white", font=("Consolas", 11, "bold"))
+        self.tag_configure("pivote_fila", background=COLOR_PIVOTE_FILA, foreground="white", font=("Consolas", 11, "bold"))
+        self.tag_configure("razon_minima", background=COLOR_RAZON_MINIMA, foreground="white", font=("Consolas", 11, "bold"))
+        self.tag_configure("elemento_pivote", background=COLOR_ELEMENTO_PIVOTE, foreground="white", font=("Consolas", 11, "bold"))
     
     def cargar_iteracion(self, iteracion: Iteracion):
         """
@@ -115,8 +121,15 @@ class TablaSimplex(ttk.Treeview):
         # Obtener datos formateados
         datos = FormateadorTableau.obtener_datos_tabla(iteracion)
         
-        # Configurar columnas: Fila | Variables | b
+        # Configurar columnas: Fila | Variables | b | Razones (si corresponde)
         columnas = ["Fila"] + datos["encabezados"] + ["b"]
+        
+        # Agregar columna de razones si es Iteración > 1
+        tiene_razones = (iteracion.numero_iteracion > 1 and 
+                        len(iteracion.razones_minimo_cociente) > 0)
+        if tiene_razones:
+            columnas.append("Razones")
+        
         self["columns"] = columnas
         
         # Configurar columna índice (primera, sin header visible)
@@ -124,18 +137,20 @@ class TablaSimplex(ttk.Treeview):
         self.heading("#0", text="", command=lambda: None)
         
         # Configurar columnas de datos con anchos dinámicos
-        self._configurar_anchos_columnas(columnas, datos)
+        self._configurar_anchos_columnas(columnas, datos, tiene_razones, iteracion)
         
         # Cargar datos en la tabla
-        self._insertar_datos(datos)
+        self._insertar_datos(datos, tiene_razones, iteracion)
     
-    def _configurar_anchos_columnas(self, columnas, datos):
+    def _configurar_anchos_columnas(self, columnas, datos, tiene_razones=False, iteracion=None):
         """
         Configura anchos de columnas de forma dinámica basados en contenido.
         
         Args:
             columnas: Lista de nombres de columnas
             datos: Diccionario con datos formateados
+            tiene_razones: Si hay columna de razones
+            iteracion: Iteración actual (para razones)
         """
         # Ancho mínimo por columna (en píxeles)
         ANCHO_MIN = 60
@@ -146,6 +161,9 @@ class TablaSimplex(ttk.Treeview):
         for i, col in enumerate(columnas):
             if col == "Fila":
                 ancho = max(ANCHO_MIN, 40)
+            elif col == "Razones":
+                # Columna de razones: mostrar "∞" o números
+                ancho = max(ANCHO_MIN, 70)
             elif col == "b":
                 # Columna de términos independientes
                 max_len = max(len(str(v)) for v in datos["terminos_independientes"])
@@ -163,15 +181,19 @@ class TablaSimplex(ttk.Treeview):
             self.column(col, width=ancho, anchor="center")
             self.heading(col, text=col, command=lambda: None)
     
-    def _insertar_datos(self, datos):
+    def _insertar_datos(self, datos, tiene_razones=False, iteracion=None):
         """
         Inserta datos en la tabla.
         
         Args:
             datos: Diccionario con datos formateados
+            tiene_razones: Si incluir columna de razones
+            iteracion: Iteración actual (para obtener razones)
         """
-        # Insertar fila Z (función objetivo)
+        # Insertar fila Z (función objetivo) - sin razones
         valores_z = [datos["filas"][0]] + datos["datos"][0] + [datos["terminos_independientes"][0]]
+        if tiene_razones:
+            valores_z.append("—")  # Sin razón para fila Z
         
         # Construir lista con tags para valores especiales
         tags_z = []
@@ -189,6 +211,21 @@ class TablaSimplex(ttk.Treeview):
         ):
             valores_fila = [fila_label] + fila_datos + [termino_ind]
             
+            # Agregar razón si corresponde
+            if tiene_razones and iteracion:
+                # idx+1 porque skipeamos fila Z
+                if idx + 1 < len(iteracion.razones_minimo_cociente):
+                    razon = iteracion.razones_minimo_cociente[idx + 1]
+                    if razon == float('inf'):
+                        razon_str = "∞"
+                    elif razon is None:
+                        razon_str = "—"
+                    else:
+                        razon_str = f"{float(razon):.6g}"
+                else:
+                    razon_str = "—"
+                valores_fila.append(razon_str)
+            
             # Asignar tags: alternancia de filas + tags especiales
             tags_fila = []
             for valor in valores_fila:
@@ -204,3 +241,66 @@ class TablaSimplex(ttk.Treeview):
     def obtener_iteracion_actual(self):
         """Retorna la iteración actualmente mostrada."""
         return self._iteracion_actual
+    
+    def resaltar_pivote(self, fila_pivote: int, columna_pivote: int):
+        """
+        Resalta el elemento pivote y su fila/columna.
+        
+        Args:
+            fila_pivote: Índice de fila del pivote (0=Z, 1=R1, etc)
+            columna_pivote: Índice de columna del pivote
+        """
+        if not self._iteracion_actual or fila_pivote < 0 or columna_pivote < 0:
+            return
+        
+        # Obtener todos los items de la tabla
+        items = self.get_children()
+        
+        # Resaltar fila pivote (excepto primer y último elemento: etiqueta de fila y b)
+        if 0 <= fila_pivote < len(items):
+            item_fila = items[fila_pivote]
+            valores_actuales = self.item(item_fila, "values")
+            
+            # Reconstruir valores con tags apropiados
+            nuevos_tags = []
+            for idx, valor in enumerate(valores_actuales):
+                if idx == columna_pivote:
+                    # Elemento pivote
+                    nuevos_tags.append("elemento_pivote")
+                elif idx < len(valores_actuales) - 1:  # No incluir última columna (b)
+                    # Resto de fila pivote
+                    nuevos_tags.append("pivote_fila")
+                else:
+                    # Columna b no se resalta
+                    nuevos_tags.append("evenrow")
+            
+            self.item(item_fila, tags=nuevos_tags)
+        
+        # Resaltar columna pivote en todas las filas (excepto etiquetas de fila y columna b)
+        for idx, item in enumerate(items):
+            if idx == fila_pivote:
+                continue  # Ya procesada
+            
+            valores_actuales = self.item(item, "values")
+            nuevos_tags = []
+            
+            for col_idx, valor in enumerate(valores_actuales):
+                if col_idx == columna_pivote:
+                    nuevos_tags.append("pivote_columna")
+                else:
+                    # Mantener tag original
+                    nuevos_tags.append("oddrow" if idx % 2 == 0 else "evenrow")
+            
+            self.item(item, tags=nuevos_tags)
+    
+    def limpiar_resaltado(self):
+        """Limpia todos los resaltados especiales."""
+        items = self.get_children()
+        for idx, item in enumerate(items):
+            valores = self.item(item, "values")
+            # Restaurar tags normales (alternancia de filas)
+            if idx == 0:  # Fila Z
+                tags = ["evenrow"]
+            else:
+                tags = ["oddrow" if (idx - 1) % 2 == 0 else "evenrow"]
+            self.item(item, tags=tags)

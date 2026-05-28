@@ -102,12 +102,24 @@ class Iteracion:
         variables_basicas: Lista de Variable que forman la base actual
         terminos_independientes: Vector b (lado derecho)
         nombres_variables_todas: Lista ordenada de Variable para referencia
+        columna_pivote: Índice de columna que entra (para visualización)
+        fila_pivote: Índice de fila que sale (para visualización)
+        razones_minimo_cociente: Vector de razones para cada fila
+        variable_entrante: Variable que entra a la base
+        variable_saliente: Variable que sale de la base
     """
     numero_iteracion: int
-    tableau: list[list]  # incluyendo fila Z como primera fila (puede contener float o str "M")
+    tableau: list[list]  # incluyendo fila Z como primera fila
     variables_basicas: list[Variable]
     terminos_independientes: list[float]  # vector b
     nombres_variables_todas: list[Variable] = field(default_factory=list)
+    
+    # Metadatos de pivotaje para visualización (solo en iteraciones posteriores a la 1ª)
+    columna_pivote: int = -1
+    fila_pivote: int = -1
+    razones_minimo_cociente: list[float] = field(default_factory=list)
+    variable_entrante: "Variable | None" = None
+    variable_saliente: "Variable | None" = None
     
     def __str__(self):
         return f"Iteración {self.numero_iteracion}"

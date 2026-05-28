@@ -17,6 +17,12 @@ FG_HEADER = "#7fb3d3"
 COLOR_BORDE = "#2d4a6e"
 COLOR_BASICA = "#1a6b3c"
 
+# Colores para información de pivotaje
+COLOR_PIVOTE_COLUMNA = "#2a7d3e"
+COLOR_PIVOTE_FILA = "#8b7d2e"
+COLOR_RAZON_MINIMA = "#a81e3d"
+BG_INFO_PIVOTE = "#1a2a3a"
+
 
 class PanelResultado(tk.Frame):
     """
@@ -92,6 +98,10 @@ class PanelResultado(tk.Frame):
         # Frame para información de variables básicas
         self._frame_info_basicas = tk.Frame(self, bg=BG_PANEL)
         self._frame_info_basicas.pack(fill="x", padx=10, pady=5)
+        
+        # Frame para información de pivotaje (nueva)
+        self._frame_info_pivote = tk.Frame(self, bg=BG_INFO_PIVOTE, relief="sunken", borderwidth=1)
+        self._frame_info_pivote.pack(fill="x", padx=10, pady=5)
     
     def mostrar_iteracion(self, iteracion: Iteracion):
         """
@@ -114,6 +124,13 @@ class PanelResultado(tk.Frame):
         
         # Cargar tabla simplex
         self._tabla.cargar_iteracion(iteracion)
+        
+        # Resaltar pivote si corresponde (iteración > 1)
+        if iteracion.numero_iteracion > 1 and iteracion.columna_pivote >= 0 and iteracion.fila_pivote >= 0:
+            self._tabla.resaltar_pivote(iteracion.fila_pivote, iteracion.columna_pivote)
+            self._mostrar_info_pivote(iteracion)
+        else:
+            self._limpiar_info_pivote()
         
         # Información de variables básicas
         self._construir_info_basicas(datos)
@@ -155,5 +172,121 @@ class PanelResultado(tk.Frame):
         for widget in self._frame_info_basicas.winfo_children():
             widget.destroy()
         
+        self._limpiar_info_pivote()
+        
         self._lbl_iteracion.config(text="Esperando resolver problema...")
         self._iteracion_actual = None
+    
+    def _mostrar_info_pivote(self, iteracion: Iteracion):
+        """
+        Muestra información sobre el pivotaje realizado.
+        
+        Args:
+            iteracion: Iteración con datos de pivotaje
+        """
+        # Limpiar información anterior
+        for widget in self._frame_info_pivote.winfo_children():
+            widget.destroy()
+        
+        # Título
+        tk.Label(
+            self._frame_info_pivote,
+            text="📊 Información de Pivotaje",
+            font=("Segoe UI", 10, "bold"),
+            bg=BG_INFO_PIVOTE,
+            fg=FG_HEADER
+        ).pack(anchor="w", padx=8, pady=(6, 3))
+        
+        # Variables que entran y salen
+        frame_vars = tk.Frame(self._frame_info_pivote, bg=BG_INFO_PIVOTE)
+        frame_vars.pack(anchor="w", padx=12, pady=2)
+        
+        var_entra = str(iteracion.variable_entrante) if iteracion.variable_entrante else "—"
+        var_sale = str(iteracion.variable_saliente) if iteracion.variable_saliente else "—"
+        
+        tk.Label(
+            frame_vars,
+            text=f"Entra: ",
+            font=("Consolas", 10),
+            bg=BG_INFO_PIVOTE,
+            fg=FG_HEADER
+        ).pack(side="left")
+        
+        tk.Label(
+            frame_vars,
+            text=f"{var_entra}",
+            font=("Consolas", 10, "bold"),
+            bg=COLOR_PIVOTE_COLUMNA,
+            fg="white",
+            padx=4,
+            relief="solid",
+            borderwidth=1
+        ).pack(side="left", padx=4)
+        
+        tk.Label(
+            frame_vars,
+            text=f"| Sale: ",
+            font=("Consolas", 10),
+            bg=BG_INFO_PIVOTE,
+            fg=FG_HEADER
+        ).pack(side="left")
+        
+        tk.Label(
+            frame_vars,
+            text=f"{var_sale}",
+            font=("Consolas", 10, "bold"),
+            bg=COLOR_PIVOTE_FILA,
+            fg="white",
+            padx=4,
+            relief="solid",
+            borderwidth=1
+        ).pack(side="left", padx=4)
+        
+        # Razón mínima
+        frame_razon = tk.Frame(self._frame_info_pivote, bg=BG_INFO_PIVOTE)
+        frame_razon.pack(anchor="w", padx=12, pady=2)
+        
+        if iteracion.razones_minimo_cociente:
+            # Encontrar la razón mínima
+            razones_validas = [r for r in iteracion.razones_minimo_cociente if r != float('inf') and r is not None]
+            razon_min = min(razones_validas) if razones_validas else None
+            
+            tk.Label(
+                frame_razon,
+                text=f"Razón mínima: ",
+                font=("Consolas", 10),
+                bg=BG_INFO_PIVOTE,
+                fg=FG_HEADER
+            ).pack(side="left")
+            
+            if razon_min is not None:
+                tk.Label(
+                    frame_razon,
+                    text=f"{razon_min:.6g}",
+                    font=("Consolas", 10, "bold"),
+                    bg=COLOR_RAZON_MINIMA,
+                    fg="white",
+                    padx=4,
+                    relief="solid",
+                    borderwidth=1
+                ).pack(side="left", padx=4)
+        
+        # Operación de fila (pequeño resumen)
+        frame_op = tk.Frame(self._frame_info_pivote, bg=BG_INFO_PIVOTE)
+        frame_op.pack(anchor="w", padx=12, pady=3)
+        
+        tk.Label(
+            frame_op,
+            text="Operación: F_pivote ÷ pivote; F_i ← F_i − a[i,j] × F_pivote",
+            font=("Consolas", 9),
+            bg=BG_INFO_PIVOTE,
+            fg=FG_TEXTO,
+            wraplength=350,
+            justify="left"
+        ).pack(anchor="w")
+    
+    def _limpiar_info_pivote(self):
+        """Limpia el panel de información de pivotaje."""
+        self._tabla.limpiar_resaltado()
+        for widget in self._frame_info_pivote.winfo_children():
+            widget.destroy()

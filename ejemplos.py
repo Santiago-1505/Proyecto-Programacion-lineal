@@ -174,7 +174,8 @@ def ejemplo_4_uso_solucionador():
     iteracion = constructor.construir_tableau_inicial(objetivo, tipo_opt, restricciones)
     
     # Crear solucionador
-    solucionador = SolucionadorSimplex(iteracion)
+    es_minimizacion = (tipo_opt.lower() == "min")
+    solucionador = SolucionadorSimplex(iteracion, es_minimizacion)
     
     print(f"\nSolucionador inicializado:")
     print(f"  - Iteración actual: {solucionador.iteracion_actual}")

@@ -15,6 +15,10 @@ from core.parser.expresion import (
     parsear_terminos, vectorizar_expresion, obtener_max_indice_variable
 )
 
+# Constante M para penalización de variables artificiales
+# Usar valor muy grande para asegurar que se eliminen de la base
+M_PENALIZACION = 1e10
+
 
 class ConstructorPrimerIteracion:
     """Construye la primera iteración del tableau simplex con método Gran M."""
@@ -132,7 +136,7 @@ class ConstructorPrimerIteracion:
             - terminos_ind: list[float] - lado derecho de cada restricción
             - variables_agregadas: dict con info de variables agregadas
         """
-        # Primero, recorrer todas las restricciones para determinar columnas necesarias
+        # Paso 1: Procesar cada restricción para determinar variables agregadas
         datos_restricciones = []
         
         for restriccion in restricciones:
@@ -159,6 +163,7 @@ class ConstructorPrimerIteracion:
                     tipo_restriccion = TipoRestriccion.MENOR_IGUAL
                 elif tipo_restriccion == TipoRestriccion.MENOR_IGUAL:
                     tipo_restriccion = TipoRestriccion.MAYOR_IGUAL
+                # IGUALDAD permanece IGUALDAD
             else:
                 tipo_restriccion = restriccion.tipo
             
@@ -168,145 +173,109 @@ class ConstructorPrimerIteracion:
                 'tipo': tipo_restriccion
             })
         
-        # Ahora recorrer cada restricción y asignar variables
-        variables_agregadas = {
-            'holgura': [],
-            'exceso': [],
-            'artificial': []
-        }
-        variables_basicas = []
-        
+        # Paso 2: Contar variables a agregar
         for datos in datos_restricciones:
-            tipo_restriccion = datos['tipo']
-            
-            if tipo_restriccion == TipoRestriccion.MENOR_IGUAL:
-                # Agregar variable de holgura S
+            tipo = datos['tipo']
+            if tipo == TipoRestriccion.MENOR_IGUAL:
                 self.contador_holgura += 1
-                var_basica = Variable(TipoVariable.HOLGURA, self.contador_holgura)
-                variables_agregadas['holgura'].append(var_basica)
-                
-            elif tipo_restriccion == TipoRestriccion.MAYOR_IGUAL:
-                # Agregar variable de exceso E y artificial A
+            elif tipo == TipoRestriccion.MAYOR_IGUAL:
                 self.contador_exceso += 1
                 self.contador_artificial += 1
-                
-                var_exceso = Variable(TipoVariable.EXCESO, self.contador_exceso)
-                var_artificial = Variable(TipoVariable.ARTIFICIAL, self.contador_artificial)
-                
-                variables_agregadas['exceso'].append(var_exceso)
-                variables_agregadas['artificial'].append(var_artificial)
-                var_basica = var_artificial
-                
-            elif tipo_restriccion == TipoRestriccion.IGUALDAD:
-                # Agregar solo variable artificial A
+            elif tipo == TipoRestriccion.IGUALDAD:
                 self.contador_artificial += 1
-                var_artificial = Variable(TipoVariable.ARTIFICIAL, self.contador_artificial)
-                variables_agregadas['artificial'].append(var_artificial)
-                var_basica = var_artificial
+        
+        # Paso 3: Construir variables básicas iniciales
+        variables_basicas = []
+        contador_holgura_actual = 0
+        contador_exceso_actual = 0
+        contador_artificial_actual = 0
+        
+        for datos in datos_restricciones:
+            tipo = datos['tipo']
+            var_basica: Variable | None = None
             
-            variables_basicas.append(var_basica)
+            if tipo == TipoRestriccion.MENOR_IGUAL:
+                contador_holgura_actual += 1
+                var_basica = Variable(TipoVariable.HOLGURA, contador_holgura_actual)
+            elif tipo == TipoRestriccion.MAYOR_IGUAL:
+                contador_exceso_actual += 1
+                contador_artificial_actual += 1
+                var_basica = Variable(TipoVariable.ARTIFICIAL, contador_artificial_actual)
+            elif tipo == TipoRestriccion.IGUALDAD:
+                contador_artificial_actual += 1
+                var_basica = Variable(TipoVariable.ARTIFICIAL, contador_artificial_actual)
+            else:
+                raise ValueError(f"Tipo de restricción desconocido: {tipo}")
+            
+            if var_basica is not None:
+                variables_basicas.append(var_basica)
         
-        # Construir matriz con todas las columnas
-        num_cols_totales = (
-            self.num_variables_decision +
-            len(variables_agregadas['holgura']) +
-            len(variables_agregadas['exceso']) +
-            len(variables_agregadas['artificial'])
-        )
+        # Paso 4: Construir información de variables agregadas para fila Z
+        variables_agregadas = {
+            'holgura': [Variable(TipoVariable.HOLGURA, i) for i in range(1, self.contador_holgura + 1)],
+            'exceso': [Variable(TipoVariable.EXCESO, i) for i in range(1, self.contador_exceso + 1)],
+            'artificial': [Variable(TipoVariable.ARTIFICIAL, i) for i in range(1, self.contador_artificial + 1)]
+        }
         
-        # Contador de cada tipo de variable para asignar en orden
-        idx_holgura = 0
-        idx_exceso = 0
-        idx_artificial = 0
-        
+        # Paso 5: Construir matriz con todas las columnas
+        # Orden: [x1...xn | S1...Sm | E1...Ek | A1...Ap]
         matriz = []
         terminos_ind = []
         
+        # Para cada restricción original
         for i, datos in enumerate(datos_restricciones):
-            fila = datos['vector'].copy()  # Copiar coeficientes de variables de decisión
-            tipo_restriccion = datos['tipo']
+            fila = datos['vector'].copy()  # Coeficientes de variables de decisión
+            tipo = datos['tipo']
             
             # Agregar columnas para variables de holgura
-            for j in range(len(variables_agregadas['holgura'])):
-                if tipo_restriccion == TipoRestriccion.MENOR_IGUAL and j == idx_holgura:
+            # Para cada posición de holgura: 1 si es la holgura de esta restricción, 0 en otro caso
+            for j in range(1, self.contador_holgura + 1):
+                # Contar cuántas restricciones <= hay antes de la actual
+                num_menores_antes = sum(
+                    1 for d in datos_restricciones[:i]
+                    if d['tipo'] == TipoRestriccion.MENOR_IGUAL
+                )
+                # ¿Es esta restricción una <= y es la j-ésima <?
+                if tipo == TipoRestriccion.MENOR_IGUAL and j == num_menores_antes + 1:
                     fila.append(1.0)
-                    idx_holgura += 1
                 else:
                     fila.append(0.0)
             
             # Agregar columnas para variables de exceso
-            idx_exceso_actual = 0
-            for j in range(len(variables_agregadas['exceso'])):
-                if tipo_restriccion == TipoRestriccion.MAYOR_IGUAL and j == idx_exceso_actual:
-                    fila.append(-1.0)
-                    idx_exceso_actual += 1
+            for j in range(1, self.contador_exceso + 1):
+                # Contar cuántas restricciones >= hay antes de la actual
+                num_mayores_antes = sum(
+                    1 for d in datos_restricciones[:i]
+                    if d['tipo'] == TipoRestriccion.MAYOR_IGUAL
+                )
+                # ¿Es esta restricción una >= y es la j-ésima >=?
+                if tipo == TipoRestriccion.MAYOR_IGUAL and j == num_mayores_antes + 1:
+                    fila.append(-1.0)  # Coeficiente -1 para exceso
                 else:
                     fila.append(0.0)
             
             # Agregar columnas para variables artificiales
-            idx_artificial_actual = 0
-            for j in range(len(variables_agregadas['artificial'])):
-                if tipo_restriccion in (TipoRestriccion.MAYOR_IGUAL, TipoRestriccion.IGUALDAD):
-                    if tipo_restriccion == TipoRestriccion.MAYOR_IGUAL and j == idx_exceso + idx_artificial_actual:
+            # Contar artificiales: primero los de >= , luego los de =
+            contador_artificial_antes = sum(
+                1 for d in datos_restricciones[:i]
+                if d['tipo'] in (TipoRestriccion.MAYOR_IGUAL, TipoRestriccion.IGUALDAD)
+            )
+            
+            for j in range(1, self.contador_artificial + 1):
+                if tipo == TipoRestriccion.MAYOR_IGUAL:
+                    # Artificial de >=: ¿es la j-ésima?
+                    if j == contador_artificial_antes + 1:
                         fila.append(1.0)
-                        idx_artificial_actual += 1
-                    elif tipo_restriccion == TipoRestriccion.IGUALDAD and j == idx_artificial:
-                        fila.append(1.0)
-                        idx_artificial += 1
                     else:
                         fila.append(0.0)
-                else:
+                elif tipo == TipoRestriccion.IGUALDAD:
+                    # Artificial de =: ¿es la j-ésima?
+                    if j == contador_artificial_antes + 1:
+                        fila.append(1.0)
+                    else:
+                        fila.append(0.0)
+                else:  # MENOR_IGUAL
                     fila.append(0.0)
-            
-            matriz.append(fila)
-            terminos_ind.append(datos['lado_derecho'])
-        
-        # Approach más simple: construir matriz de forma más directa
-        # Reconstruir desde cero de forma más clara
-        matriz = []
-        terminos_ind = []
-        
-        contador_S = 0
-        contador_E = 0
-        contador_A = 0
-        
-        for i, datos in enumerate(datos_restricciones):
-            fila = datos['vector'].copy()
-            tipo_restriccion = datos['tipo']
-            
-            # Recorrer todas las variables agregadas que hemos creado hasta ahora
-            # y agregar coeficientes apropiados
-            
-            # Agregar ceros/unos para TODAS las variables de holgura
-            for j in range(1, self.contador_holgura + 1):
-                if tipo_restriccion == TipoRestriccion.MENOR_IGUAL and j == contador_S + 1:
-                    fila.append(1.0)
-                else:
-                    fila.append(0.0)
-            
-            # Agregar para TODAS las variables de exceso
-            for j in range(1, self.contador_exceso + 1):
-                if tipo_restriccion == TipoRestriccion.MAYOR_IGUAL and j == contador_E + 1:
-                    fila.append(-1.0)
-                else:
-                    fila.append(0.0)
-            
-            # Agregar para TODAS las variables artificiales
-            for j in range(1, self.contador_artificial + 1):
-                if tipo_restriccion == TipoRestriccion.MAYOR_IGUAL and j == contador_E + contador_A + 1:
-                    fila.append(1.0)
-                elif tipo_restriccion == TipoRestriccion.IGUALDAD and j == contador_A + 1:
-                    fila.append(1.0)
-                else:
-                    fila.append(0.0)
-            
-            if tipo_restriccion == TipoRestriccion.MENOR_IGUAL:
-                contador_S += 1
-            elif tipo_restriccion == TipoRestriccion.MAYOR_IGUAL:
-                contador_E += 1
-                contador_A += 1
-            elif tipo_restriccion == TipoRestriccion.IGUALDAD:
-                contador_A += 1
             
             matriz.append(fila)
             terminos_ind.append(datos['lado_derecho'])
@@ -331,7 +300,7 @@ class ConstructorPrimerIteracion:
             variables_agregadas: Dict con variables artificiales agregadas
         
         Returns:
-            Fila Z con todas las columnas (puede contener float o "M")
+            Fila Z con todas las columnas (floats numéricos)
         """
         # Parsear objetivo
         terminos_obj = parsear_terminos(objetivo)
@@ -342,12 +311,8 @@ class ConstructorPrimerIteracion:
         for termino in terminos_obj:
             indice = termino.variable.indice - 1
             if 0 <= indice < self.num_variables_decision:
-                if tipo_optimizacion == "max":
-                    # Para maximización, cambiar signo
-                    fila_z[indice] = -termino.coeficiente
-                else:
-                    # Para minimización, mantener signo
-                    fila_z[indice] = termino.coeficiente
+                # AMBOS casos negan para forma estándar de tabla simplex
+                fila_z[indice] = -termino.coeficiente
         
         # Agregar coeficientes para variables de holgura (0)
         for _ in variables_agregadas['holgura']:
@@ -357,15 +322,11 @@ class ConstructorPrimerIteracion:
         for _ in variables_agregadas['exceso']:
             fila_z.append(0.0)
         
-        # Agregar coeficientes para variables artificiales (M o -M)
-        # Usar la representación simbólica "M"
+        # Agregar coeficientes para variables artificiales (M)
+        # Usar valor numérico para M
         for _ in variables_agregadas['artificial']:
-            if tipo_optimizacion == "max":
-                # Para máximo: -M (penalización)
-                fila_z.append("M")  # Representación simbólica
-            else:
-                # Para mínimo: +M (penalización)
-                fila_z.append("M")
+            # Penalización M (valor grande)
+            fila_z.append(M_PENALIZACION)
         
         return fila_z
     
