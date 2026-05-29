@@ -47,15 +47,22 @@ class VentanaPrincipal(tk.Tk):
         tk.Frame(self, width=2, bg="#2d4a6e").pack(side="left", fill="y")
 
         # Panel derecho con layout vertical
-        panel_derecho = tk.Frame(self, bg=BG_DERECHO)
-        panel_derecho.pack(side="right", fill="both", expand=True)
+        self._panel_container = tk.Frame(self, bg=BG_DERECHO)
+        self._panel_container.pack(side="right", fill="both", expand=True)
 
-        # Panel de resultados
-        self._panel_resultado = PanelResultado(panel_derecho, bg=BG_DERECHO)
+        # Dividir contenedor en area de contenido (arriba) y controles (abajo)
+        self._panel_content = tk.Frame(self._panel_container, bg=BG_DERECHO)
+        self._panel_content.pack(side="top", fill="both", expand=True)
+
+        self._panel_controls_holder = tk.Frame(self._panel_container, bg=BG_DERECHO)
+        self._panel_controls_holder.pack(side="bottom", fill="x")
+
+        # Panel de resultados inicial dentro del content
+        self._panel_resultado = PanelResultado(self._panel_content, bg=BG_DERECHO)
         self._panel_resultado.pack(fill="both", expand=True)
 
-        # Panel de controles en la parte inferior
-        self._construir_panel_controles(panel_derecho)
+        # Panel de controles en la parte inferior del contenedor (use controls holder)
+        self._construir_panel_controles(self._panel_controls_holder)
 
     def _construir_panel_controles(self, parent):
         """Construye el panel de controles con botones de navegación."""
@@ -104,7 +111,7 @@ class VentanaPrincipal(tk.Tk):
             bg=BG_BUTTON if self._btn_siguiente["state"] == "normal" else BG_BUTTON_DISABLED
         ))
 
-    def _on_resolver(self, objetivo: str, tipo_obj: str, restricciones):
+    def _on_resolver(self, objetivo: str, tipo_obj: str, restricciones, metodo: str = 'gran_m'):
         """Callback recibido desde PanelEntrada al pulsar Resolver."""
         try:
             # Mostrar información en consola (para debugging)
@@ -115,23 +122,68 @@ class VentanaPrincipal(tk.Tk):
                 print(f"  {r}")
             print("=" * 60)
             
-            # Construir primera iteración
-            constructor = ConstructorPrimerIteracion()
-            iteracion_inicial = constructor.construir_tableau_inicial(
-                objetivo=objetivo,
-                tipo_optimizacion=tipo_obj,
-                restricciones=restricciones
-            )
-            
-            # Crear solucionador
-            es_minimizacion = (tipo_obj.lower() == "min")
-            self._solucionador = SolucionadorSimplex(iteracion_inicial, es_minimizacion)
-            
-            # Mostrar primera iteración
-            self._panel_resultado.mostrar_iteracion(iteracion_inicial)
-            
-            # Actualizar estado de botón
-            self._actualizar_estado_controles()
+            if metodo == 'grafico':
+                # Renderizar método gráfico (sólo para 2 variables)
+                try:
+                    from core.graphical_solver import solve_graphical
+                except Exception as e:
+                    # Problema con el módulo de resolución gráfica
+                    messagebox.showerror("Error", f"No se puede cargar el motor gráfico: {e}")
+                    return
+
+                # Validar y resolver (solve_graphical lanzará ValueError si >2)
+                try:
+                    result = solve_graphical(objetivo, tipo_obj, restricciones, include_nonnegativity=True)
+                except ValueError:
+                    # Re-lanzar para ser capturado por except ValueError externo
+                    raise
+                except Exception as e:
+                    messagebox.showerror("Error", f"Error al calcular la solución gráfica: {e}")
+                    return
+
+                # Intentar importar UI gráfico (matplotlib puede faltar)
+                try:
+                    from ui.panel_grafico import PanelGrafico
+                except ImportError:
+                    messagebox.showerror(
+                        "Dependencia faltante",
+                        "Para usar el método gráfico instale matplotlib: pip install matplotlib"
+                    )
+                    return
+
+                # destruir contenido previo del content frame y colocar panel gráfico
+                for child in list(self._panel_content.winfo_children()):
+                    child.destroy()
+                self._panel_resultado = PanelGrafico(self._panel_content, bg=BG_DERECHO)
+                self._panel_resultado.pack(fill="both", expand=True)
+                # render puede lanzar excepciones; manejar para no romper la UI
+                try:
+                    self._panel_resultado.render(result)
+                except Exception as e:
+                    messagebox.showerror("Error gráfico", f"Error al renderizar el gráfico: {e}")
+                    return
+                # Disable simplex controls
+                self._solucionador = None
+                self._actualizar_estado_controles()
+            else:
+                # Construir primera iteración y usar SolucionadorSimplex (Gran M)
+                constructor = ConstructorPrimerIteracion()
+                iteracion_inicial = constructor.construir_tableau_inicial(
+                    objetivo=objetivo,
+                    tipo_optimizacion=tipo_obj,
+                    restricciones=restricciones
+                )
+                # Crear solucionador
+                es_minimizacion = (tipo_obj.lower() == "min")
+                self._solucionador = SolucionadorSimplex(iteracion_inicial, es_minimizacion)
+                # Mostrar primera iteración (limpiar content frame y crear panel)
+                for child in list(self._panel_content.winfo_children()):
+                    child.destroy()
+                self._panel_resultado = PanelResultado(self._panel_content, bg=BG_DERECHO)
+                self._panel_resultado.pack(fill="both", expand=True)
+                self._panel_resultado.mostrar_iteracion(iteracion_inicial)
+                # Actualizar estado de botón
+                self._actualizar_estado_controles()
             
         except ValueError as e:
             messagebox.showerror("Error de validación", str(e))

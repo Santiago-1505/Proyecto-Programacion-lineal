@@ -29,6 +29,7 @@
                 tkinter
 								watchfiles
 								ipykernel
+                matplotlib
               ]))
               ruff
               basedpyright

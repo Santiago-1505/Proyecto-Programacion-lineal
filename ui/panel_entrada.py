@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox
 from core.modelo import Restriccion, TipoRestriccion
+from core.parser.expresion import obtener_max_indice_variable
 from ui.widgets.fila_restriccion import FilaRestriccion
 from typing import Callable, Optional
 
@@ -53,6 +54,10 @@ class PanelEntrada(tk.Frame):
         self._construir_seccion_objetivo()
         self._construir_seccion_restricciones()
         self._construir_btn_resolver()
+        # Método de resolución: 'gran_m' o 'grafico'
+        self._metodo_resolver = 'gran_m'
+        # Actualizar estado del control de método según variables actuales
+        self._update_metodo_estado()
 
     # Construcción UI
 
@@ -114,6 +119,12 @@ class PanelEntrada(tk.Frame):
             highlightcolor=COLOR_FOCUS,
         )
         self._entry_objetivo.pack(side="left", padx=(0, 10), ipady=5)
+        # React to changes in objective to update available methods
+        try:
+            self._var_objetivo.trace_add('write', lambda *a: self._update_metodo_estado())
+        except Exception:
+            # older tkinter versions may not have trace_add
+            self._var_objetivo.trace('w', lambda *a: self._update_metodo_estado())
 
         # Min / Max radio
         self._var_tipo_obj = tk.StringVar(value="min")
@@ -126,6 +137,20 @@ class PanelEntrada(tk.Frame):
                 activeforeground=FG_TEXTO,
             )
             rb.pack(side="left", padx=4)
+
+        # Método radio (Simplex vs Gráfico)
+        metodo_frame = tk.Frame(inner, bg=BG_SECCION)
+        metodo_frame.pack(fill="x", pady=(8, 0))
+        tk.Label(metodo_frame, text="Método:", font=FONT_LABEL, bg=BG_SECCION, fg=FG_LABEL).pack(side="left")
+        self._var_metodo = tk.StringVar(value='gran_m')
+        rb1 = tk.Radiobutton(metodo_frame, text='Gran M (Simplex)', variable=self._var_metodo, value='gran_m',
+                             font=FONT_LABEL, bg=BG_SECCION, fg=FG_TEXTO, selectcolor=COLOR_ENTRY)
+        rb2 = tk.Radiobutton(metodo_frame, text='Gráfico (2 variables)', variable=self._var_metodo, value='grafico',
+                             font=FONT_LABEL, bg=BG_SECCION, fg=FG_TEXTO, selectcolor=COLOR_ENTRY)
+        rb1.pack(side='left', padx=6)
+        rb2.pack(side='left', padx=6)
+        # Keep references to radios for state updates
+        self._rb_grafico = rb2
 
         tk.Label(
             inner,
@@ -214,6 +239,13 @@ class PanelEntrada(tk.Frame):
         )
         fila.pack(fill="x", pady=1)
         self._filas.append(fila)
+        # Trace changes on the left expression to update method availability
+        try:
+            fila._var_izq.trace_add('write', lambda *a: self._update_metodo_estado())
+        except Exception:
+            fila._var_izq.trace('w', lambda *a: self._update_metodo_estado())
+        # ensure method buttons update when rows change
+        self._update_metodo_estado()
 
     def _eliminar_fila(self, fila: FilaRestriccion):
         if len(self._filas) == 1:
@@ -227,6 +259,8 @@ class PanelEntrada(tk.Frame):
         # Renumerar filas restantes
         for i, f in enumerate(self._filas, start=1):
             f.actualizar_numero(i)
+        # Update method availability after removing a row
+        self._update_metodo_estado()
 
     # API pública
 
@@ -263,5 +297,37 @@ class PanelEntrada(tk.Frame):
                 )
                 return
 
+        metodo = self._var_metodo.get() if hasattr(self, '_var_metodo') else 'gran_m'
+        # Guardar: si el método seleccionado es gráfico pero hay más de 2 variables,
+        # anular y mostrar mensaje
+        max_idx = obtener_max_indice_variable(obj)
+        for fila in self._filas:
+            max_idx = max(max_idx, obtener_max_indice_variable(fila.lado_izquierdo))
+        if metodo == 'grafico' and max_idx > 2:
+            messagebox.showerror("Error", "El método gráfico sólo está disponible para sistemas con 2 variables.")
+            return
         if self._callback_resolver:
-            self._callback_resolver(obj, tipo_obj, restricciones)
+            # callback receives: objetivo, tipo_obj, restricciones, metodo
+            self._callback_resolver(obj, tipo_obj, restricciones, metodo)
+
+    def _update_metodo_estado(self):
+        """Habilita/deshabilita la opción Gráfico si el modelo tiene más de 2 variables."""
+        try:
+            max_idx = obtener_max_indice_variable(self._var_objetivo.get())
+        except Exception:
+            max_idx = 0
+        for fila in self._filas:
+            try:
+                max_idx = max(max_idx, obtener_max_indice_variable(fila.lado_izquierdo))
+            except Exception:
+                pass
+
+        if hasattr(self, '_rb_grafico'):
+            if max_idx > 2:
+                # Disable graphic method
+                self._rb_grafico.config(state='disabled')
+                # If currently selected, switch to Gran M
+                if self._var_metodo.get() == 'grafico':
+                    self._var_metodo.set('gran_m')
+            else:
+                self._rb_grafico.config(state='normal')
