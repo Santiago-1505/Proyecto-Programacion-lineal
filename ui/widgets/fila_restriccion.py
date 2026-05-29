@@ -6,7 +6,8 @@ from core.modelo import TipoRestriccion
 # Paleta de colores
 BG_FILA       = "#1e2a3a"
 BG_FILA_ALT   = "#1a2433"
-FG_TEXTO      = "#000000"
+FG_TEXTO      = "#ffffff"
+FG_TEXTO_COMBO_BOX = "#000000"
 FG_LABEL      = "#7fb3d3"
 COLOR_BORDE   = "#2d4a6e"
 COLOR_ENTRY   = "#0f1923"
@@ -65,7 +66,7 @@ class FilaRestriccion(tk.Frame):
             style_name,
             fieldbackground=COLOR_ENTRY,
             background=COLOR_ENTRY,
-            foreground=FG_TEXTO,
+            foreground=FG_TEXTO_COMBO_BOX,
             arrowcolor=FG_LABEL,
             bordercolor=COLOR_BORDE,
             lightcolor=COLOR_BORDE,
