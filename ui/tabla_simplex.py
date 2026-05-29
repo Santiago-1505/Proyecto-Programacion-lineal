@@ -124,9 +124,12 @@ class TablaSimplex(ttk.Treeview):
         # Configurar columnas: Fila | Variables | b | Razones (si corresponde)
         columnas = ["Fila"] + datos["encabezados"] + ["b"]
         
-        # Agregar columna de razones si es Iteración > 1
-        tiene_razones = (iteracion.numero_iteracion > 1 and 
-                        len(iteracion.razones_minimo_cociente) > 0)
+        # Agregar columna de razones si la iteración tiene vector de razones
+        tiene_razones = (
+            iteracion.numero_iteracion > 1 and
+            iteracion.razones_minimo_cociente is not None and
+            len(iteracion.razones_minimo_cociente) == len(iteracion.tableau)
+        )
         if tiene_razones:
             columnas.append("Razones")
         
@@ -216,10 +219,10 @@ class TablaSimplex(ttk.Treeview):
                 # idx+1 porque skipeamos fila Z
                 if idx + 1 < len(iteracion.razones_minimo_cociente):
                     razon = iteracion.razones_minimo_cociente[idx + 1]
-                    if razon == float('inf'):
-                        razon_str = "∞"
-                    elif razon is None:
+                    if razon is None:
                         razon_str = "—"
+                    elif razon == float('inf'):
+                        razon_str = "∞"
                     else:
                         razon_str = f"{float(razon):.6g}"
                 else:

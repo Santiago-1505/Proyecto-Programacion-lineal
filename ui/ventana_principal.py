@@ -158,6 +158,8 @@ class VentanaPrincipal(tk.Tk):
                     "El botón será deshabilitado ahora."
                 )
                 messagebox.showinfo("Solución óptima alcanzada", mensaje)
+                # Asegurar que el estado visual de los controles se actualice
+                self._actualizar_estado_controles()
                 return
             
             # Avanzar a siguiente iteración
@@ -172,10 +174,14 @@ class VentanaPrincipal(tk.Tk):
             
         except RuntimeError as e:
             messagebox.showerror("Error de resolución", f"Problema: {str(e)}")
+            # Asegurar actualización del estado de controles tras error
+            self._actualizar_estado_controles()
         except Exception as e:
             messagebox.showerror("Error inesperado", str(e))
             import traceback
             traceback.print_exc()
+            # También actualizar controles en caso de excepción inesperada
+            self._actualizar_estado_controles()
 
     def _actualizar_estado_controles(self):
         """Actualiza el estado de los controles según el solucionador."""
@@ -197,6 +203,19 @@ class VentanaPrincipal(tk.Tk):
 
         # Habilitar/deshabilitar botón según si puede avanzar
         if self._solucionador.puede_avanzar():
-            self._btn_siguiente.config(state="normal", bg=BG_BUTTON)
+            # Hay pasos disponibles: mostrar botón activo
+            self._btn_siguiente.config(state="normal", bg=BG_BUTTON, fg=FG_BUTTON)
         else:
-            self._btn_siguiente.config(state="disabled", bg=BG_BUTTON_DISABLED)
+            # Si el problema está resuelto y no hay coeficientes negativos en Z,
+            # mostrar el botón deshabilitado (visible). En cualquier otro caso
+            # deshabilitar pero mantener visibilidad por consistencia.
+            iter_act = self._solucionador.obtener_iteracion_actual()
+            fila_z = iter_act.tableau[0]
+            # comprobar si hay coeficientes negativos en Z
+            tiene_negativos = any(coef < -1e-9 for coef in fila_z)
+
+            # Mostrar estilo deshabilitado pero visible sólo si no hay negativos
+            if not tiene_negativos and self._solucionador.resuelto:
+                self._btn_siguiente.config(state="disabled", bg=BG_BUTTON, disabledforeground="#888888")
+            else:
+                self._btn_siguiente.config(state="disabled", bg=BG_BUTTON_DISABLED, disabledforeground="#666666")

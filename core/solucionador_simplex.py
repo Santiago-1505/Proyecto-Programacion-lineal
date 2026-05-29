@@ -6,6 +6,7 @@ incluyendo la Fase 1 (eliminación de variables artificiales) y Fase 2 (optimiza
 """
 
 from core.modelo import Iteracion, Variable, TipoVariable
+from core import simplex_utils
 
 
 class SolucionadorSimplex:
@@ -130,11 +131,13 @@ class SolucionadorSimplex:
                 self.resuelto = True
                 return
         
-        # Seleccionar variable saliente
-        fila_saliente, razones = self._seleccionar_variable_saliente(
-            iteracion_actual,
-            col_entrante
+        # Seleccionar variable saliente (calcula razones alineadas)
+        razones = simplex_utils.calcular_razones_alineadas(
+            iteracion_actual.tableau,
+            iteracion_actual.terminos_independientes,
+            col_entrante,
         )
+        fila_saliente = simplex_utils.elegir_fila_pivote_desde_razones(razones)
         
         if fila_saliente is None:
             # El problema es ilimitado
@@ -150,25 +153,37 @@ class SolucionadorSimplex:
         self.fila_pivote_actual = fila_saliente
         self.razones_minimo_cociente = razones
         
-        # Realizar pivoteo
-        self._realizar_pivoteo(iteracion_actual, fila_saliente, col_entrante)
-        
-        # Actualizar variables básicas
-        nueva_var_basica = iteracion_actual.nombres_variables_todas[col_entrante]
-        iteracion_actual.variables_basicas[fila_saliente - 1] = nueva_var_basica
-        
-        # Crear nueva iteración
-        nueva_iteracion = self._crear_siguiente_iteracion(
-            iteracion_actual,
-            col_entrante,
+        # Realizar pivoteo produciendo nuevas estructuras (no mutar iteración anterior)
+        nuevo_tableau, nuevos_terminos = simplex_utils.pivot_pure(
+            iteracion_actual.tableau,
+            iteracion_actual.terminos_independientes,
             fila_saliente,
-            razones
+            col_entrante,
         )
-        
+
+        # Actualizar variables básicas (crear copia y reemplazar)
+        nuevas_vars_basicas = iteracion_actual.variables_basicas[:]
+        nueva_var_basica = iteracion_actual.nombres_variables_todas[col_entrante]
+        nuevas_vars_basicas[fila_saliente - 1] = nueva_var_basica
+
+        # Crear nueva iteración usando las copias resultantes
+        nueva_iteracion = Iteracion(
+            numero_iteracion=iteracion_actual.numero_iteracion + 1,
+            tableau=[fila[:] for fila in nuevo_tableau],
+            variables_basicas=nuevas_vars_basicas,
+            terminos_independientes=nuevos_terminos[:],
+            nombres_variables_todas=iteracion_actual.nombres_variables_todas[:],
+            columna_pivote=col_entrante,
+            fila_pivote=fila_saliente,
+            razones_minimo_cociente=razones,
+            variable_entrante=iteracion_actual.nombres_variables_todas[col_entrante],
+            variable_saliente=iteracion_actual.variables_basicas[fila_saliente - 1]
+        )
+
         # Agregar al historial
         self.iteraciones.append(nueva_iteracion)
         self.iteracion_actual += 1
-        
+
         # Verificar optimalidad
         if self._es_optimo(nueva_iteracion):
             if self.en_fase_1:
@@ -184,49 +199,10 @@ class SolucionadorSimplex:
             else:
                 self.resuelto = True
             return
-        
-        # Paso 2: Seleccionar variable saliente
-        fila_saliente, razones = self._seleccionar_variable_saliente(
-            iteracion_actual,
-            col_entrante
-        )
-        
-        if fila_saliente is None:
-            # El problema es ilimitado
-            self.es_ilimitado = True
-            raise RuntimeError(
-                f"El problema es ilimitado. "
-                f"Variable {iteracion_actual.nombres_variables_todas[col_entrante]} "
-                f"puede crecer sin límite."
-            )
-        
-        # Guardar información de pivotaje
+        # Guardar información de pivotaje en estado público para UI
         self.columna_pivote_actual = col_entrante
         self.fila_pivote_actual = fila_saliente
         self.razones_minimo_cociente = razones
-        
-        # Paso 3: Realizar pivoteo
-        self._realizar_pivoteo(iteracion_actual, fila_saliente, col_entrante)
-        
-        # Paso 4: Actualizar variables básicas
-        nueva_var_basica = iteracion_actual.nombres_variables_todas[col_entrante]
-        iteracion_actual.variables_basicas[fila_saliente - 1] = nueva_var_basica
-        
-        # Paso 5: Crear nueva iteración
-        nueva_iteracion = self._crear_siguiente_iteracion(
-            iteracion_actual,
-            col_entrante,
-            fila_saliente,
-            razones
-        )
-        
-        # Agregar al historial
-        self.iteraciones.append(nueva_iteracion)
-        self.iteracion_actual += 1
-        
-        # Verificar optimalidad
-        if self._es_optimo(nueva_iteracion):
-            self.resuelto = True
     
     def _seleccionar_variable_entrante(self, iteracion: Iteracion) -> int | None:
         """
@@ -247,17 +223,28 @@ class SolucionadorSimplex:
             Índice de columna (0 a n-1) o None si se alcanzó óptimo
         """
         fila_z = iteracion.tableau[0]
-        
-        # Buscar coeficiente más NEGATIVO
-        min_idx = None
-        min_val = 0.0
-        
-        for j in range(len(fila_z)):
-            if fila_z[j] < min_val:
-                min_val = fila_z[j]
-                min_idx = j
-        
-        return min_idx
+
+        # Selección depende de si es minimización o maximización
+        best_idx = None
+        best_val = None
+
+        if self.es_minimizacion:
+            # En minimización buscamos el coeficiente MÁS POSITIVO que indique
+            # que aumentar la variable incrementará Z (según convención interna).
+            for j, val in enumerate(fila_z):
+                if best_val is None or val > best_val:
+                    if val > 1e-12:
+                        best_val = val
+                        best_idx = j
+        else:
+            # Maximización: buscar coeficiente más negativo
+            for j, val in enumerate(fila_z):
+                if best_val is None or val < best_val:
+                    if val < -1e-12:
+                        best_val = val
+                        best_idx = j
+
+        return best_idx
     
     def _seleccionar_variable_saliente(
         self,
@@ -280,33 +267,16 @@ class SolucionadorSimplex:
         Returns:
             (índice_fila_pivote, vector_razones) o (None, []) si es ilimitado
         """
-        razones = []
-        fila_pivote = None
-        razon_minima = float('inf')
-        
-        # Recorrer filas de restricciones (índices 1 a m)
-        num_restricciones = iteracion.obtener_num_restricciones()
-        
-        for i in range(1, num_restricciones + 1):
-            a_ij = iteracion.tableau[i][columna_entrante]
-            b_i = iteracion.terminos_independientes[i]
-            
-            if a_ij > 0:  # SOLO valores positivos
-                razon = b_i / a_ij
-                razones.append(razon)
-                
-                # Actualizar mínimo
-                if razon < razon_minima:
-                    razon_minima = razon
-                    fila_pivote = i
-            else:
-                # Valor no positivo: razón indefinida
-                razones.append(float('inf'))
-        
+        # Delegar cálculo de razones al utilitario (devuelve lista alineada)
+        razones = simplex_utils.calcular_razones_alineadas(
+            iteracion.tableau,
+            iteracion.terminos_independientes,
+            columna_entrante,
+        )
+
+        fila_pivote = simplex_utils.elegir_fila_pivote_desde_razones(razones)
         if fila_pivote is None:
-            # No hay divisor positivo: problema ilimitado
             return None, razones
-        
         return fila_pivote, razones
     
     def _realizar_pivoteo(
@@ -329,26 +299,18 @@ class SolucionadorSimplex:
             fila_pivote: Índice de fila pivote (1-indexed en el tableau)
             columna_pivote: Índice de columna pivote (0-indexed)
         """
-        # Paso 1: Normalizar fila pivote
-        pivote = iteracion.tableau[fila_pivote][columna_pivote]
-        
-        if abs(pivote) < 1e-12:
-            raise RuntimeError(f"Pivote demasiado pequeño: {pivote}")
-        
-        # Dividir fila pivote entre el pivote
-        for j in range(len(iteracion.tableau[fila_pivote])):
-            iteracion.tableau[fila_pivote][j] /= pivote
-        iteracion.terminos_independientes[fila_pivote] /= pivote
-        
-        # Paso 2: Eliminar en otras filas
-        for i in range(len(iteracion.tableau)):
-            if i != fila_pivote:
-                factor = -iteracion.tableau[i][columna_pivote]
-                
-                for j in range(len(iteracion.tableau[i])):
-                    iteracion.tableau[i][j] += factor * iteracion.tableau[fila_pivote][j]
-                
-                iteracion.terminos_independientes[i] += factor * iteracion.terminos_independientes[fila_pivote]
+        # Ahora delegamos la lógica al utilitario puro para evitar mutaciones.
+        # Este método queda como wrapper por compatibilidad interna y no muta
+        # la iteración pasada; se mantiene para llamadas antiguas pero su uso
+        # no es recomendado.
+        tabla, terminos = simplex_utils.pivot_pure(
+            iteracion.tableau,
+            iteracion.terminos_independientes,
+            fila_pivote,
+            columna_pivote,
+        )
+        # No se asigna de vuelta a `iteracion` para evitar mutar historiales.
+        return tabla, terminos
     
     def _es_optimo(self, iteracion: Iteracion) -> bool:
         """
@@ -367,9 +329,13 @@ class SolucionadorSimplex:
         """
         fila_z = iteracion.tableau[0]
         tolerancia = 1e-9
-        
-        # Todos los coeficientes deben ser >= 0 (dentro de tolerancia)
-        return all(coef >= -tolerancia for coef in fila_z)
+
+        if self.es_minimizacion:
+            # Minimización: todos los coef deben ser <= 0 (dentro de tolerancia)
+            return all(coef <= tolerancia for coef in fila_z)
+        else:
+            # Maximización: todos los coef deben ser >= 0
+            return all(coef >= -tolerancia for coef in fila_z)
     
     def _crear_siguiente_iteracion(
         self,

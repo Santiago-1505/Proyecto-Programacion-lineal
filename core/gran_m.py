@@ -14,6 +14,7 @@ from core.modelo import (
 from core.parser.expresion import (
     parsear_terminos, vectorizar_expresion, obtener_max_indice_variable
 )
+from core import simplex_utils
 
 # Constante M para penalización de variables artificiales
 # Usar valor muy grande para asegurar que se eliminen de la base
@@ -81,8 +82,33 @@ class ConstructorPrimerIteracion:
         # Combinar tableau: fila Z + matriz de restricciones
         tableau = [fila_z] + matriz_restricciones
         
-        # El término independiente para Z es siempre 0 (en la forma Z - ... = 0)
+        # El término independiente para Z es siempre 0 inicialmente
         terminos_ind_completo = [0.0] + terminos_ind
+
+        # Canonicalizar fila Z eliminando la contribución de artificiales
+        # identificamos índices de columnas artificiales en el orden construido
+        num_cols_decision = self.num_variables_decision
+        idx_holgura = num_cols_decision
+        idx_exceso = idx_holgura + self.contador_holgura
+        idx_artificial = idx_exceso + self.contador_exceso
+
+        indices_artificiales = list(range(idx_artificial, idx_artificial + self.contador_artificial))
+
+        # Ajustar fila Z y término independiente usando utilitario
+        tableau_full = [fila_z] + matriz_restricciones
+        fila_z_ajustada, termino_z = simplex_utils.eliminar_artificiales_de_Z(
+            fila_z,
+            tableau_full,
+            terminos_ind_completo,
+            indices_artificiales,
+        )
+
+        # Reemplazar fila Z y su término independiente
+        fila_z = fila_z_ajustada
+        terminos_ind_completo[0] = termino_z
+
+        # Reconstruir tableau completo usando la fila Z ajustada
+        tableau = [fila_z] + matriz_restricciones
         
         # Construir lista completa de todas las variables en orden
         nombres_variables = self._construir_lista_variables_todas()
@@ -95,7 +121,16 @@ class ConstructorPrimerIteracion:
             terminos_independientes=terminos_ind_completo,
             nombres_variables_todas=nombres_variables
         )
-        
+
+        # Validar consistencia básica antes de retornar
+        simplex_utils.validar_consistencia_iteracion(
+            iteracion.tableau,
+            iteracion.terminos_independientes,
+            iteracion.variables_basicas,
+            iteracion.nombres_variables_todas,
+            None,
+        )
+
         return iteracion
     
     def _determinar_num_variables_decision(
@@ -311,7 +346,7 @@ class ConstructorPrimerIteracion:
         for termino in terminos_obj:
             indice = termino.variable.indice - 1
             if 0 <= indice < self.num_variables_decision:
-                # AMBOS casos negan para forma estándar de tabla simplex
+                # Mantener la convención estándar: fila Z almacena -coeficiente
                 fila_z[indice] = -termino.coeficiente
         
         # Agregar coeficientes para variables de holgura (0)
@@ -323,10 +358,10 @@ class ConstructorPrimerIteracion:
             fila_z.append(0.0)
         
         # Agregar coeficientes para variables artificiales (M)
-        # Usar valor numérico para M
+        # Usar valor numérico para M con signo según tipo de optimización
+        signo_M = 1.0 if tipo_optimizacion == "max" else -1.0
         for _ in variables_agregadas['artificial']:
-            # Penalización M (valor grande)
-            fila_z.append(M_PENALIZACION)
+            fila_z.append(signo_M * M_PENALIZACION)
         
         return fila_z
     
