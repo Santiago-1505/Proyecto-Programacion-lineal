@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox
 from typing import Optional
+import math
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -68,6 +69,54 @@ class PanelGrafico(tk.Frame):
             ox, oy = result.optimum_point
             self._ax.scatter([ox], [oy], color='red', s=80, zorder=10)
             self._ax.annotate(f"Optimo: ({ox:.3f}, {oy:.3f})\nZ={result.optimum_value:.3f}", (ox, oy), textcoords="offset points", xytext=(10,10))
+            # Draw objective line passing through optimum: c1*x + c2*y = Z*
+            if getattr(result, 'obj_vec', None) is not None and result.optimum_value is not None:
+                c1, c2 = result.obj_vec
+                z = result.optimum_value
+                # Determine plotting bounds that cover the polygon/vertices
+                xs_all = []
+                ys_all = []
+                if result.polygon:
+                    xs_all += [p[0] for p in result.polygon]
+                    ys_all += [p[1] for p in result.polygon]
+                if result.feasible_vertices:
+                    xs_all += [p[0] for p in result.feasible_vertices]
+                    ys_all += [p[1] for p in result.feasible_vertices]
+                if result.optimum_point:
+                    xs_all.append(result.optimum_point[0]); ys_all.append(result.optimum_point[1])
+
+                if xs_all and ys_all:
+                    xmin, xmax = min(xs_all), max(xs_all)
+                    ymin, ymax = min(ys_all), max(ys_all)
+                    dx = max(1.0, (xmax - xmin) * 0.25)
+                    dy = max(1.0, (ymax - ymin) * 0.25)
+                    x0, x1 = xmin - dx, xmax + dx
+                    y0, y1 = ymin - dy, ymax + dy
+                else:
+                    x0, x1 = self._ax.get_xlim() if self._ax.has_data() else (ox - 5, ox + 5)
+                    y0, y1 = self._ax.get_ylim() if self._ax.has_data() else (oy - 5, oy + 5)
+
+                # handle vertical objective (c2 ~ 0)
+                if abs(c2) < 1e-12 and abs(c1) > 0:
+                    x_line = z / c1
+                    ys = [y0, y1]
+                    xs = [x_line, x_line]
+                else:
+                    # compute xs across extended x-range and corresponding ys
+                    xs = [x0, x1]
+                    ys = [ (z - c1 * xv) / c2 for xv in xs ]
+
+                # draw the line so that it visibly crosses the polygon (on top)
+                self._ax.plot(xs, ys, color='green', linestyle='-', linewidth=2.0, zorder=9)
+
+                # annotate with equation placed in the top-right corner of the axes
+                eq = f"{c1:.3g}x1 {'+' if c2>=0 else '-'} {abs(c2):.3g}x2 = {z:.3g}"
+                self._ax.text(
+                    0.98, 0.98, eq,
+                    transform=self._ax.transAxes,
+                    ha='right', va='top', color='green', fontsize=9,
+                    bbox=dict(facecolor='white', alpha=0.8, edgecolor='none')
+                )
 
         # Draw recession rays when unbounded and rays provided
         if result.rays:

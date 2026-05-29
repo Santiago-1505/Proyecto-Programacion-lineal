@@ -63,6 +63,8 @@ class GraphicalResult:
     warnings: List[str]
     # rays: list of direction vectors (unit) indicating recession directions when unbounded
     rays: List[Tuple[float, float]] = None
+    # Objective vector (c1, c2) for plotting the objective line
+    obj_vec: Optional[Tuple[float, float]] = None
 
 
 def _line_from_coeffs(a: float, b: float, c: float, idx: Optional[int] = None) -> Line:
@@ -504,6 +506,7 @@ def solve_graphical(objetivo: str, tipo_opt: str, restricciones: List[Restriccio
         lines=lines,
         warnings=warnings,
         rays=rays,
+        obj_vec=obj_vec,
     )
 
 
