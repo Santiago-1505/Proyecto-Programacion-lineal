@@ -4,6 +4,7 @@ from ui.panel_entrada import PanelEntrada
 from ui.panel_resultado import PanelResultado
 from core.gran_m import ConstructorPrimerIteracion
 from core.solucionador_simplex import SolucionadorSimplex
+from core.analisis_sensibilidad import calcular_sensibilidad
 
 
 BG_VENTANA   = "#0f1923"
@@ -225,7 +226,7 @@ class VentanaPrincipal(tk.Tk):
         try:
             if not self._solucionador.puede_avanzar():
                 valor_z = self._solucionador.obtener_valor_objetivo()
-                
+
                 mensaje = (
                     "✓ Se alcanzó la solución óptima\n\n"
                     f"Valor de Z: {valor_z:.4f}\n\n"
@@ -234,6 +235,13 @@ class VentanaPrincipal(tk.Tk):
                 messagebox.showinfo("Solución óptima alcanzada", mensaje)
                 # Asegurar que el estado visual de los controles se actualice
                 self._actualizar_estado_controles()
+                # Calcular y mostrar análisis de sensibilidad
+                try:
+                    sensibilidad = calcular_sensibilidad(self._solucionador)
+                    self._panel_resultado.mostrar_sensibilidad(sensibilidad)
+                except Exception as e:
+                    # Mostrar mensaje no intrusivo si análisis no es aplicable
+                    print(f"Análisis de sensibilidad no disponible: {e}")
                 return
             
             # Avanzar a siguiente iteración
