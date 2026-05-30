@@ -135,6 +135,19 @@ class VentanaPrincipal(tk.Tk):
         self._btn_siguiente.pack(side="right", padx=5)
         self._btn_siguiente.state(['disabled'])
 
+        # Botón para mostrar/ocultar Análisis de Sensibilidad (inicialmente oculto)
+        self._sensibilidad_visible = False
+        self._sensibilidad_cache = None
+        self._btn_sensibilidad = ttk.Button(
+            frame_interior,
+            text="Mostrar Sensibilidad",
+            command=self._on_toggle_sensibilidad,
+            style='Siguiente.TButton',
+            cursor="hand2",
+        )
+        self._btn_sensibilidad.pack(side="right", padx=5)
+        self._btn_sensibilidad.state(['disabled'])
+
     def _on_resolver(self, objetivo: str, tipo_obj: str, restricciones, metodo: str = 'gran_m'):
         """Callback recibido desde PanelEntrada al pulsar Resolver."""
         try:
@@ -235,22 +248,25 @@ class VentanaPrincipal(tk.Tk):
                 messagebox.showinfo("Solución óptima alcanzada", mensaje)
                 # Asegurar que el estado visual de los controles se actualice
                 self._actualizar_estado_controles()
-                # Calcular y mostrar análisis de sensibilidad
+
+                # Calcular y mostrar análisis de sensibilidad (no intrusivo en UI)
                 try:
                     sensibilidad = calcular_sensibilidad(self._solucionador)
+                    self._sensibilidad_cache = sensibilidad
+                    self._sensibilidad_visible = True
                     self._panel_resultado.mostrar_sensibilidad(sensibilidad)
                 except Exception as e:
                     # Mostrar mensaje no intrusivo si análisis no es aplicable
                     print(f"Análisis de sensibilidad no disponible: {e}")
                 return
-            
+
             # Avanzar a siguiente iteración
             self._solucionador.siguiente_iteracion()
-            
+
             # Mostrar nueva iteración
             iter_nueva = self._solucionador.obtener_iteracion_actual()
             self._panel_resultado.mostrar_iteracion(iter_nueva)
-            
+
             # Actualizar controles
             self._actualizar_estado_controles()
             
@@ -271,6 +287,7 @@ class VentanaPrincipal(tk.Tk):
             self._btn_siguiente.state(['disabled'])
             self._btn_siguiente.configure(style='Siguiente.TButton')
             self._lbl_info.config(text="")
+            self._btn_sensibilidad.state(['disabled'])
             return
 
         iter_actual = self._solucionador.obtener_iteracion_actual()
@@ -290,6 +307,8 @@ class VentanaPrincipal(tk.Tk):
         if self._solucionador.puede_avanzar():
             self._btn_siguiente.state(['!disabled'])
             self._btn_siguiente.configure(style='Siguiente.TButton')
+            # Mientras no esté resuelto no permitimos togglear sensibilidad
+            self._btn_sensibilidad.state(['disabled'])
         else:
             iter_act = self._solucionador.obtener_iteracion_actual()
             fila_z = iter_act.tableau[0]
@@ -300,3 +319,39 @@ class VentanaPrincipal(tk.Tk):
             else:
                 self._btn_siguiente.configure(style='Siguiente.TButton')
             self._btn_siguiente.state(['disabled'])
+            # Habilitar botón de sensibilidad solo si existe solución y no es infactible
+            if self._solucionador.resuelto and not self._solucionador.es_infactible:
+                self._btn_sensibilidad.state(['!disabled'])
+            else:
+                self._btn_sensibilidad.state(['disabled'])
+
+    def _on_toggle_sensibilidad(self):
+        """Muestra u oculta la vista de sensibilidad (toggle)."""
+        if self._solucionador is None:
+            return
+        # Si no hay cache, intentar calcular
+        if not self._sensibilidad_cache:
+            try:
+                sensibilidad = calcular_sensibilidad(self._solucionador)
+                self._sensibilidad_cache = sensibilidad
+            except Exception as e:
+                messagebox.showwarning("Análisis no disponible", str(e))
+                return
+
+        if self._sensibilidad_visible:
+            # Ocultar
+            try:
+                self._panel_resultado.ocultar_sensibilidad()
+            except Exception:
+                pass
+            self._sensibilidad_visible = False
+            self._btn_sensibilidad.config(text="Mostrar Sensibilidad")
+        else:
+            # Mostrar
+            try:
+                self._panel_resultado.mostrar_sensibilidad(self._sensibilidad_cache)
+            except Exception as e:
+                messagebox.showwarning("Análisis no disponible", str(e))
+                return
+            self._sensibilidad_visible = True
+            self._btn_sensibilidad.config(text="Ocultar Sensibilidad")

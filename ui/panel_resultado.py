@@ -228,6 +228,15 @@ class PanelResultado(tk.Frame):
             tk.Label(frame_row, text=val, font=("Consolas", 10), bg=BG_PANEL, fg=FG_TEXTO, width=16, anchor="e").grid(row=0, column=1)
             tk.Label(frame_row, text=rango_s, font=("Consolas", 10), bg=BG_PANEL, fg=FG_TEXTO, width=40, anchor="w").grid(row=0, column=2)
 
+    def ocultar_sensibilidad(self):
+        """Oculta/elimina la vista de sensibilidad si existe."""
+        if hasattr(self, '_frame_sensibilidad'):
+            try:
+                self._frame_sensibilidad.destroy()
+            except Exception:
+                pass
+            delattr(self, '_frame_sensibilidad')
+
     
     def limpiar(self):
         """Limpia el panel."""
