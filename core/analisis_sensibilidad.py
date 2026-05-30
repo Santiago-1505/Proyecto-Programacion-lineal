@@ -81,8 +81,9 @@ def calcular_sensibilidad(solver: SolucionadorSimplex) -> Dict[str, List[Dict]]:
     una lista de dicts {'parametro': str, 'valor_inicial': float, 'rango': (lo, hi)}
     donde None en los límites representa -inf/+inf.
     """
-    if not solver.resuelto:
-        raise RuntimeError("El solucionador debe haber alcanzado una solución óptima")
+    # Requerir que el solucionador no pueda avanzar (estado final), no esté en fase 1
+    if solver.puede_avanzar():
+        raise RuntimeError("El solucionador aún puede avanzar; ejecute hasta la iteración final antes de analizar sensibilidad")
     if solver.es_infactible:
         raise RuntimeError("No aplicable: el problema es infactible")
     if solver.en_fase_1:

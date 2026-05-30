@@ -319,8 +319,9 @@ class VentanaPrincipal(tk.Tk):
             else:
                 self._btn_siguiente.configure(style='Siguiente.TButton')
             self._btn_siguiente.state(['disabled'])
-            # Habilitar botón de sensibilidad solo si existe solución y no es infactible
-            if self._solucionador.resuelto and not self._solucionador.es_infactible:
+            # Habilitar botón de sensibilidad si el solucionador no puede avanzar
+            # y no está en fase 1 ni es infactible
+            if (not self._solucionador.puede_avanzar()) and (not self._solucionador.en_fase_1) and (not self._solucionador.es_infactible):
                 self._btn_sensibilidad.state(['!disabled'])
             else:
                 self._btn_sensibilidad.state(['disabled'])
