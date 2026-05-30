@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import ttk, messagebox
 from ui.panel_entrada import PanelEntrada
 from ui.panel_resultado import PanelResultado
 from core.gran_m import ConstructorPrimerIteracion
@@ -35,6 +35,11 @@ class VentanaPrincipal(tk.Tk):
         self._construir_layout()
 
     def _construir_layout(self):
+        # Usar tema 'clam' para renderizado consistente entre X11 y Wayland
+        # (evita que el WM de X11 sobreescriba estilos de botones deshabilitados)
+        style = ttk.Style()
+        style.theme_use('clam')
+
         # Panel izquierdo: entrada del problema
         self._panel_entrada = PanelEntrada(
             self,
@@ -88,28 +93,46 @@ class VentanaPrincipal(tk.Tk):
         # Espaciador
         tk.Frame(frame_interior, bg="#0a1622").pack(side="left", expand=True)
 
-        # Botón Siguiente
-        self._btn_siguiente = tk.Button(
+        # Configurar estilos ttk para el botón
+        # ttk.Button maneja hover/active/disabled automáticamente
+        # sin necesidad de bindings <Enter>/<Leave> manuales,
+        # evitando condiciones de carrera en X11.
+        style = ttk.Style()
+        style.configure('Siguiente.TButton',
+            background=BG_BUTTON,
+            foreground=FG_BUTTON,
+            font=("Consolas", 11, "bold"),
+            padding=(20, 8),
+            borderwidth=1,
+            relief="solid",
+        )
+        style.map('Siguiente.TButton',
+            background=[('active', BG_BUTTON_HOVER), ('disabled', BG_BUTTON_DISABLED)],
+            foreground=[('disabled', '#666666')],
+        )
+
+        style.configure('SiguienteSolved.TButton',
+            background=BG_BUTTON,
+            foreground=FG_BUTTON,
+            font=("Consolas", 11, "bold"),
+            padding=(20, 8),
+            borderwidth=1,
+            relief="solid",
+        )
+        style.map('SiguienteSolved.TButton',
+            background=[('active', BG_BUTTON_HOVER), ('disabled', BG_BUTTON)],
+            foreground=[('disabled', '#888888')],
+        )
+
+        self._btn_siguiente = ttk.Button(
             frame_interior,
             text="Siguiente Iteración  ▶",
             command=self._on_siguiente_iteracion,
-            bg=BG_BUTTON,
-            fg=FG_BUTTON,
-            font=("Consolas", 11, "bold"),
-            padx=20,
-            pady=8,
-            relief="solid",
-            borderwidth=1,
+            style='Siguiente.TButton',
             cursor="hand2",
-            state="disabled"
         )
         self._btn_siguiente.pack(side="right", padx=5)
-        self._btn_siguiente.bind("<Enter>", lambda e: self._btn_siguiente.config(
-            bg=BG_BUTTON_HOVER if self._btn_siguiente["state"] == "normal" else BG_BUTTON_DISABLED
-        ))
-        self._btn_siguiente.bind("<Leave>", lambda e: self._btn_siguiente.config(
-            bg=BG_BUTTON if self._btn_siguiente["state"] == "normal" else BG_BUTTON_DISABLED
-        ))
+        self._btn_siguiente.state(['disabled'])
 
     def _on_resolver(self, objetivo: str, tipo_obj: str, restricciones, metodo: str = 'gran_m'):
         """Callback recibido desde PanelEntrada al pulsar Resolver."""
@@ -237,7 +260,8 @@ class VentanaPrincipal(tk.Tk):
     def _actualizar_estado_controles(self):
         """Actualiza el estado de los controles según el solucionador."""
         if self._solucionador is None:
-            self._btn_siguiente.config(state="disabled")
+            self._btn_siguiente.state(['disabled'])
+            self._btn_siguiente.configure(style='Siguiente.TButton')
             self._lbl_info.config(text="")
             return
 
@@ -253,20 +277,18 @@ class VentanaPrincipal(tk.Tk):
         self._lbl_info.config(text=info_text)
 
         # Habilitar/deshabilitar botón según si puede avanzar
+        # ttk.Button maneja colores automáticamente via style.map,
+        # sin bindings <Enter>/<Leave> que causan race conditions en X11.
         if self._solucionador.puede_avanzar():
-            # Hay pasos disponibles: mostrar botón activo
-            self._btn_siguiente.config(state="normal", bg=BG_BUTTON, fg=FG_BUTTON)
+            self._btn_siguiente.state(['!disabled'])
+            self._btn_siguiente.configure(style='Siguiente.TButton')
         else:
-            # Si el problema está resuelto y no hay coeficientes negativos en Z,
-            # mostrar el botón deshabilitado (visible). En cualquier otro caso
-            # deshabilitar pero mantener visibilidad por consistencia.
             iter_act = self._solucionador.obtener_iteracion_actual()
             fila_z = iter_act.tableau[0]
-            # comprobar si hay coeficientes negativos en Z
             tiene_negativos = any(coef < -1e-9 for coef in fila_z)
 
-            # Mostrar estilo deshabilitado pero visible sólo si no hay negativos
             if not tiene_negativos and self._solucionador.resuelto:
-                self._btn_siguiente.config(state="disabled", bg=BG_BUTTON, disabledforeground="#888888")
+                self._btn_siguiente.configure(style='SiguienteSolved.TButton')
             else:
-                self._btn_siguiente.config(state="disabled", bg=BG_BUTTON_DISABLED, disabledforeground="#666666")
+                self._btn_siguiente.configure(style='Siguiente.TButton')
+            self._btn_siguiente.state(['disabled'])
