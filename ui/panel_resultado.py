@@ -184,49 +184,50 @@ class PanelResultado(tk.Frame):
             font=("Segoe UI", 11, "bold"),
             bg=BG_PANEL,
             fg=FG_HEADER
-        ).pack(anchor="w")
+        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=(2, 0), pady=(2, 6))
 
-        # Crear encabezados
-        header = tk.Frame(self._frame_sensibilidad, bg=BG_PANEL)
-        header.pack(fill="x", pady=(4, 2))
-        tk.Label(header, text="Parámetro", font=("Consolas", 10, "bold"), bg=BG_PANEL, fg=FG_TEXTO, width=20, anchor="w").grid(row=0, column=0)
-        tk.Label(header, text="Valor Inicial", font=("Consolas", 10, "bold"), bg=BG_PANEL, fg=FG_TEXTO, width=16, anchor="e").grid(row=0, column=1)
-        tk.Label(header, text="Rango Permitido", font=("Consolas", 10, "bold"), bg=BG_PANEL, fg=FG_TEXTO, width=40, anchor="w").grid(row=0, column=2)
+        # Encabezados (una sola rejilla para toda la tabla)
+        hdr_font = ("Consolas", 10, "bold")
+        cell_font = ("Consolas", 10)
 
-        def fmt_limit(val):
-            if val is None:
-                return "-∞" if isinstance(val, float) or val is None else str(val)
-            return FormateadorTableau.formatear_coeficiente(val)
+        self._frame_sensibilidad.grid_columnconfigure(0, weight=1, uniform='c')
+        self._frame_sensibilidad.grid_columnconfigure(1, weight=0)
+        self._frame_sensibilidad.grid_columnconfigure(2, weight=2, uniform='c')
 
-        # Mostrar coeficientes objetivo
+        tk.Label(self._frame_sensibilidad, text="Parámetro", font=hdr_font, bg=BG_PANEL, fg=FG_TEXTO).grid(row=1, column=0, sticky="w", padx=4)
+        tk.Label(self._frame_sensibilidad, text="Valor Inicial", font=hdr_font, bg=BG_PANEL, fg=FG_TEXTO).grid(row=1, column=1, sticky="e", padx=4)
+        tk.Label(self._frame_sensibilidad, text="Rango Permitido", font=hdr_font, bg=BG_PANEL, fg=FG_TEXTO).grid(row=1, column=2, sticky="w", padx=4)
+
+        def fmt(val):
+            return FormateadorTableau.formatear_coeficiente(val) if val is not None else None
+
+        # Rellenar filas empezando en row 2
+        row_idx = 2
         for row in sensibilidad.get('coef_objetivo', []):
             param = row['parametro']
-            val = FormateadorTableau.formatear_coeficiente(row['valor_inicial'])
+            val = fmt(row['valor_inicial'])
             lo, hi = row['rango']
-            lo_s = "-∞" if lo is None else FormateadorTableau.formatear_coeficiente(lo)
-            hi_s = "+∞" if hi is None else FormateadorTableau.formatear_coeficiente(hi)
+            lo_s = "-∞" if lo is None else fmt(lo)
+            hi_s = "+∞" if hi is None else fmt(hi)
             rango_s = f"{lo_s} <= {param} <= {hi_s}"
 
-            frame_row = tk.Frame(self._frame_sensibilidad, bg=BG_PANEL)
-            frame_row.pack(fill="x")
-            tk.Label(frame_row, text=param, font=("Consolas", 10), bg=BG_PANEL, fg=FG_TEXTO, width=20, anchor="w").grid(row=0, column=0)
-            tk.Label(frame_row, text=val, font=("Consolas", 10), bg=BG_PANEL, fg=FG_TEXTO, width=16, anchor="e").grid(row=0, column=1)
-            tk.Label(frame_row, text=rango_s, font=("Consolas", 10), bg=BG_PANEL, fg=FG_TEXTO, width=40, anchor="w").grid(row=0, column=2)
+            tk.Label(self._frame_sensibilidad, text=param, font=cell_font, bg=BG_PANEL, fg=FG_TEXTO).grid(row=row_idx, column=0, sticky="w", padx=4, pady=1)
+            tk.Label(self._frame_sensibilidad, text=val, font=cell_font, bg=BG_PANEL, fg=FG_TEXTO).grid(row=row_idx, column=1, sticky="e", padx=4)
+            tk.Label(self._frame_sensibilidad, text=rango_s, font=cell_font, bg=BG_PANEL, fg=FG_TEXTO).grid(row=row_idx, column=2, sticky="w", padx=4)
+            row_idx += 1
 
-        # Mostrar RHS
         for row in sensibilidad.get('rhs', []):
             param = row['parametro']
-            val = FormateadorTableau.formatear_coeficiente(row['valor_inicial'])
+            val = fmt(row['valor_inicial'])
             lo, hi = row['rango']
-            lo_s = "-∞" if lo is None else FormateadorTableau.formatear_coeficiente(lo)
-            hi_s = "+∞" if hi is None else FormateadorTableau.formatear_coeficiente(hi)
+            lo_s = "-∞" if lo is None else fmt(lo)
+            hi_s = "+∞" if hi is None else fmt(hi)
             rango_s = f"{lo_s} <= {param} <= {hi_s}"
 
-            frame_row = tk.Frame(self._frame_sensibilidad, bg=BG_PANEL)
-            frame_row.pack(fill="x")
-            tk.Label(frame_row, text=param, font=("Consolas", 10), bg=BG_PANEL, fg=FG_TEXTO, width=20, anchor="w").grid(row=0, column=0)
-            tk.Label(frame_row, text=val, font=("Consolas", 10), bg=BG_PANEL, fg=FG_TEXTO, width=16, anchor="e").grid(row=0, column=1)
-            tk.Label(frame_row, text=rango_s, font=("Consolas", 10), bg=BG_PANEL, fg=FG_TEXTO, width=40, anchor="w").grid(row=0, column=2)
+            tk.Label(self._frame_sensibilidad, text=param, font=cell_font, bg=BG_PANEL, fg=FG_TEXTO).grid(row=row_idx, column=0, sticky="w", padx=4, pady=1)
+            tk.Label(self._frame_sensibilidad, text=val, font=cell_font, bg=BG_PANEL, fg=FG_TEXTO).grid(row=row_idx, column=1, sticky="e", padx=4)
+            tk.Label(self._frame_sensibilidad, text=rango_s, font=cell_font, bg=BG_PANEL, fg=FG_TEXTO).grid(row=row_idx, column=2, sticky="w", padx=4)
+            row_idx += 1
 
     def ocultar_sensibilidad(self):
         """Oculta/elimina la vista de sensibilidad si existe."""
