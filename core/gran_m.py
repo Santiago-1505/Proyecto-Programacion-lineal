@@ -346,8 +346,13 @@ class ConstructorPrimerIteracion:
         for termino in terminos_obj:
             indice = termino.variable.indice - 1
             if 0 <= indice < self.num_variables_decision:
-                # Mantener la convención estándar: fila Z almacena -coeficiente
-                fila_z[indice] = -termino.coeficiente
+                # Para minimización se resuelve el problema equivalente MAX -c·x,
+                # por lo que la fila Z almacena +c en lugar de -c.
+                # Esto unifica el criterio de parada: siempre "sin negativos en Z".
+                if tipo_optimizacion == "min":
+                    fila_z[indice] = termino.coeficiente
+                else:
+                    fila_z[indice] = -termino.coeficiente
         
         # Agregar coeficientes para variables de holgura (0)
         for _ in variables_agregadas['holgura']:
@@ -358,10 +363,10 @@ class ConstructorPrimerIteracion:
             fila_z.append(0.0)
         
         # Agregar coeficientes para variables artificiales (M)
-        # Usar valor numérico para M con signo según tipo de optimización
-        signo_M = 1.0 if tipo_optimizacion == "max" else -1.0
+        # Siempre +M: para minimización el problema se transforma a MAX -c·x,
+        # por lo que la penalización sigue la misma convención que maximización.
         for _ in variables_agregadas['artificial']:
-            fila_z.append(signo_M * M_PENALIZACION)
+            fila_z.append(M_PENALIZACION)
         
         return fila_z
     

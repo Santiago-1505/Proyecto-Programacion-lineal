@@ -201,8 +201,7 @@ class VentanaPrincipal(tk.Tk):
 
         try:
             if not self._solucionador.puede_avanzar():
-                iter_actual = self._solucionador.obtener_iteracion_actual()
-                valor_z = iter_actual.terminos_independientes[0]
+                valor_z = self._solucionador.obtener_valor_objetivo()
                 
                 mensaje = (
                     "✓ Se alcanzó la solución óptima\n\n"

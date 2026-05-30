@@ -41,6 +41,11 @@ class SolucionadorSimplex:
         
         # Estado de la Fase 1
         self.en_fase_1 = self._tiene_variables_artificiales(iteracion_inicial)
+        
+        # Multiplicador para corregir el valor Z al reportar:
+        # Minimización se resuelve como MAX -c·x, por lo que el Z del tableau
+        # es el negativo del valor real. Se multiplica por -1 al reportar.
+        self._z_multiplier = -1.0 if es_minimizacion else 1.0
     
     def _tiene_variables_artificiales(self, iteracion: Iteracion) -> bool:
         """Verifica si hay variables artificiales en la base inicial."""
@@ -52,6 +57,15 @@ class SolucionadorSimplex:
     def obtener_iteracion_actual(self) -> Iteracion:
         """Retorna la iteración actual."""
         return self.iteraciones[self.iteracion_actual]
+    
+    def obtener_valor_objetivo(self) -> float:
+        """
+        Retorna el valor Z corregido según el tipo de optimización.
+        
+        Para minimización, el tableau almacena el valor de MAX -c·x,
+        por lo que se multiplica por -1 para obtener el mínimo real.
+        """
+        return self._z_multiplier * self.obtener_iteracion_actual().terminos_independientes[0]
     
     def puede_avanzar(self) -> bool:
         """
@@ -208,13 +222,13 @@ class SolucionadorSimplex:
         """
         Selecciona la variable que entra a la base.
         
-        En el tableau simplex estándar, usamos SIEMPRE la misma regla:
-        - Buscar el coeficiente más NEGATIVO de la fila Z
-        - Si no hay negativos, hemos alcanzado óptimo
+        Busca el coeficiente más NEGATIVO de la fila Z.
+        Si no hay negativos, se alcanzó el óptimo.
         
         Esto funciona tanto para minimización como maximización porque:
-        - En minimización: los coeficientes se mantienen con su signo original
-        - En maximización: los coeficientes se niegan al inicio
+        - En minimización: el tableau se construye con signos invertidos
+          (equivalente a MAX -c·x), por lo que la regla es la misma.
+        - En maximización: se usa la convención estándar.
         
         Args:
             iteracion: Iteración actual
@@ -224,25 +238,15 @@ class SolucionadorSimplex:
         """
         fila_z = iteracion.tableau[0]
 
-        # Selección depende de si es minimización o maximización
         best_idx = None
         best_val = None
 
-        if self.es_minimizacion:
-            # En minimización buscamos el coeficiente MÁS POSITIVO que indique
-            # que aumentar la variable incrementará Z (según convención interna).
-            for j, val in enumerate(fila_z):
-                if best_val is None or val > best_val:
-                    if val > 1e-12:
-                        best_val = val
-                        best_idx = j
-        else:
-            # Maximización: buscar coeficiente más negativo
-            for j, val in enumerate(fila_z):
-                if best_val is None or val < best_val:
-                    if val < -1e-12:
-                        best_val = val
-                        best_idx = j
+        # Buscar coeficiente más negativo (menor que -1e-12)
+        for j, val in enumerate(fila_z):
+            if best_val is None or val < best_val:
+                if val < -1e-12:
+                    best_val = val
+                    best_idx = j
 
         return best_idx
     
@@ -316,10 +320,9 @@ class SolucionadorSimplex:
         """
         Verifica si se alcanzó la solución óptima.
         
-        En el tableau simplex estándar:
-        - Óptimo se alcanza cuando TODOS los coeficientes de la fila Z son ≥ 0
-        - Esto es válido tanto para minimización como para maximización
-          porque los coeficientes se tratan de forma simétrica
+        Óptimo se alcanza cuando TODOS los coeficientes de la fila Z son ≥ 0
+        (dentro de tolerancia). Esto funciona para ambos tipos de optimización
+        porque la minimización se transforma a MAX -c·x en la construcción.
         
         Args:
             iteracion: Iteración a verificar
@@ -330,12 +333,8 @@ class SolucionadorSimplex:
         fila_z = iteracion.tableau[0]
         tolerancia = 1e-9
 
-        if self.es_minimizacion:
-            # Minimización: todos los coef deben ser <= 0 (dentro de tolerancia)
-            return all(coef <= tolerancia for coef in fila_z)
-        else:
-            # Maximización: todos los coef deben ser >= 0
-            return all(coef >= -tolerancia for coef in fila_z)
+        # Todos los coeficientes deben ser >= 0
+        return all(coef >= -tolerancia for coef in fila_z)
     
     def _crear_siguiente_iteracion(
         self,

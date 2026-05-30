@@ -20,9 +20,10 @@ class TestExtraSolverCases(unittest.TestCase):
             solver.siguiente_iteracion()
 
         # Verificar que la iteración final tenga el valor objetivo esperado
-        ultima = solver.obtener_iteracion_actual()
-        # El término independiente de Z para este problema debe ser 5
-        self.assertAlmostEqual(ultima.terminos_independientes[0], 5.0, places=6)
+        # Se usa obtener_valor_objetivo() porque el tableau almacena el
+        # valor negado para minimización (MAX -c·x en lugar de MIN c·x).
+        valor_z = solver.obtener_valor_objetivo()
+        self.assertAlmostEqual(valor_z, 5.0, places=6)
 
     def test_detecta_ilimitado_simple(self):
         # maximize x1 with constraint x1 >= 1 -> ilimitado
