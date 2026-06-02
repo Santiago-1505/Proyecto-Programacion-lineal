@@ -24,11 +24,15 @@ class VentanaPrincipal(tk.Tk):
         self.minsize(1000, 700)
         self.configure(bg=BG_VENTANA)
 
-        # Centrar ventana en pantalla
+        # Centrar ventana en pantalla, sin exceder la resolución disponible
         self.update_idletasks()
-        x = (self.winfo_screenwidth()  - 1700) // 2
-        y = (self.winfo_screenheight() - 900)  // 2
-        self.geometry(f"1700x900+{x}+{y}")
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        w = min(1700, screen_w - 80)
+        h = min(900, screen_h - 80)
+        x = (screen_w - w) // 2
+        y = (screen_h - h) // 2
+        self.geometry(f"{w}x{h}+{x}+{y}")
 
         # Estado del solucionador
         self._solucionador = None
