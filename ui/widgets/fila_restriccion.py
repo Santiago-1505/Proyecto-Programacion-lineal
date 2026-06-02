@@ -61,7 +61,6 @@ class FilaRestriccion(tk.Frame):
 
         style_name = f"Restriccion{numero}.TCombobox"
         style = ttk.Style()
-        style.theme_use("clam")
         style.configure(
             style_name,
             fieldbackground=COLOR_ENTRY,
@@ -121,6 +120,8 @@ class FilaRestriccion(tk.Frame):
         nuevo_bg = BG_FILA if nuevo_num % 2 == 0 else BG_FILA_ALT
         self.config(bg=nuevo_bg)
         self._lbl_num.config(bg=nuevo_bg)
+        for w in (self._entry_izq, self._entry_der, self._btn_elim):
+            pass
 
     @property
     def lado_izquierdo(self) -> str:
