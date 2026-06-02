@@ -16,6 +16,18 @@ FG_BUTTON    = "#e8edf2"
 BG_BUTTON_DISABLED = "#0a1622"
 
 
+def _hover(widget, color_normal, color_hover):
+    """Bindings Enter/Leave para efecto hover, respetando estado disabled."""
+    def on_enter(e):
+        if str(widget.cget('state')) != 'disabled':
+            widget.config(bg=color_hover)
+    def on_leave(e):
+        if str(widget.cget('state')) != 'disabled':
+            widget.config(bg=color_normal)
+    widget.bind("<Enter>", on_enter)
+    widget.bind("<Leave>", on_leave)
+
+
 class VentanaPrincipal(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -40,8 +52,8 @@ class VentanaPrincipal(tk.Tk):
         self._construir_layout()
 
     def _construir_layout(self):
-        # Usar tema 'clam' para renderizado consistente entre X11 y Wayland
-        # (evita que el WM de X11 sobreescriba estilos de botones deshabilitados)
+        # Usar tema 'clam' para renderizado consistente del Treeview
+        # entre X11 y Wayland.
         style = ttk.Style()
         style.theme_use('clam')
 
@@ -98,60 +110,50 @@ class VentanaPrincipal(tk.Tk):
         # Espaciador
         tk.Frame(frame_interior, bg="#0a1622").pack(side="left", expand=True)
 
-        # Configurar estilos ttk para el botón
-        # ttk.Button maneja hover/active/disabled automáticamente
-        # sin necesidad de bindings <Enter>/<Leave> manuales,
-        # evitando condiciones de carrera en X11.
-        style = ttk.Style()
-        style.configure('Siguiente.TButton',
-            background=BG_BUTTON,
-            foreground=FG_BUTTON,
-            font=("Consolas", 11, "bold"),
-            padding=(20, 8),
-            borderwidth=1,
-            relief="solid",
-        )
-        # Se usa un único estilo con 3 estados vía style.map:
-        #   - enabled (sin flags): colores normales
-        #   - disabled (sin selected): fondo oscuro (antes de resolver)
-        #   - disabled + selected: fondo normal, texto gris (óptimo alcanzado)
-        # Esto evita llamar configure(style=...) en tiempo de ejecución,
-        # lo cual causa que los botones desaparezcan en X11 (bug de Tk/clam).
-        style.map('Siguiente.TButton',
-            background=[
-                ('disabled selected', BG_BUTTON),
-                ('disabled', BG_BUTTON_DISABLED),
-                ('pressed', BG_BUTTON_HOVER),
-                ('active', BG_BUTTON_HOVER),
-            ],
-            foreground=[
-                ('disabled selected', '#888888'),
-                ('disabled', '#666666'),
-            ],
-        )
-
-        self._btn_siguiente = ttk.Button(
+        # Botón "Siguiente Iteración" como tk.Button (no ttk.Button).
+        # ttk.Button con tema 'clam' tiene un bug de renderizado en X11
+        # que lo vuelve invisible al cambiar su estado o estilo.
+        # tk.Button usa dibujo nativo de X11 y no sufre este problema.
+        self._btn_siguiente = tk.Button(
             frame_interior,
             text="Siguiente Iteración  ▶",
             command=self._on_siguiente_iteracion,
-            style='Siguiente.TButton',
+            font=("Consolas", 11, "bold"),
+            bg=BG_BUTTON_DISABLED,
+            fg=FG_BUTTON,
+            disabledforeground='#666666',
+            activebackground=BG_BUTTON_HOVER,
+            activeforeground=FG_BUTTON,
+            relief="flat",
             cursor="hand2",
+            padx=20,
+            pady=8,
         )
         self._btn_siguiente.pack(side="right", padx=5)
-        self._btn_siguiente.state(['disabled'])
+        self._btn_siguiente.config(state='disabled')
+        _hover(self._btn_siguiente, BG_BUTTON, BG_BUTTON_HOVER)
 
         # Botón para mostrar/ocultar Análisis de Sensibilidad (inicialmente oculto)
         self._sensibilidad_visible = False
         self._sensibilidad_cache = None
-        self._btn_sensibilidad = ttk.Button(
+        self._btn_sensibilidad = tk.Button(
             frame_interior,
             text="Mostrar Sensibilidad",
             command=self._on_toggle_sensibilidad,
-            style='Siguiente.TButton',
+            font=("Consolas", 11, "bold"),
+            bg=BG_BUTTON_DISABLED,
+            fg=FG_BUTTON,
+            disabledforeground='#666666',
+            activebackground=BG_BUTTON_HOVER,
+            activeforeground=FG_BUTTON,
+            relief="flat",
             cursor="hand2",
+            padx=20,
+            pady=8,
         )
         self._btn_sensibilidad.pack(side="right", padx=5)
-        self._btn_sensibilidad.state(['disabled'])
+        self._btn_sensibilidad.config(state='disabled')
+        _hover(self._btn_sensibilidad, BG_BUTTON, BG_BUTTON_HOVER)
 
     def _on_resolver(self, objetivo: str, tipo_obj: str, restricciones, metodo: str = 'gran_m'):
         """Callback recibido desde PanelEntrada al pulsar Resolver."""
@@ -289,14 +291,14 @@ class VentanaPrincipal(tk.Tk):
     def _actualizar_estado_controles(self):
         """Actualiza el estado de los controles según el solucionador.
 
-        Solo usa state() para cambiar la apariencia, nunca configure(style=...),
-        porque en X11 el tema 'clam' de Tk tiene un bug que al re-aplicar
-        un estilo sobre un ttk.Button ya mapeado lo renderiza invisible.
+        Usa config(state=...) de tk.Button (no state() de ttk),
+        porque ttk.Button con tema 'clam' tiene un bug en X11 que lo
+        vuelve invisible al cambiar su estado dinámicamente.
         """
         if self._solucionador is None:
-            self._btn_siguiente.state(['disabled', '!selected'])
+            self._btn_siguiente.config(state='disabled', bg=BG_BUTTON_DISABLED, disabledforeground='#666666')
             self._lbl_info.config(text="")
-            self._btn_sensibilidad.state(['disabled'])
+            self._btn_sensibilidad.config(state='disabled', bg=BG_BUTTON_DISABLED, disabledforeground='#666666')
             return
 
         iter_actual = self._solucionador.obtener_iteracion_actual()
@@ -311,27 +313,25 @@ class VentanaPrincipal(tk.Tk):
         self._lbl_info.config(text=info_text)
 
         # Habilitar/deshabilitar botón según si puede avanzar
-        # Los colores se manejan automáticamente via style.map,
-        # sin llamar configure(style=...), evitando el bug de X11.
         if self._solucionador.puede_avanzar():
-            self._btn_siguiente.state(['!disabled', '!selected'])
+            self._btn_siguiente.config(state='normal', bg=BG_BUTTON, fg=FG_BUTTON)
             # Mientras no esté resuelto no permitimos togglear sensibilidad
-            self._btn_sensibilidad.state(['disabled'])
+            self._btn_sensibilidad.config(state='disabled', bg=BG_BUTTON_DISABLED, disabledforeground='#666666')
         else:
             iter_act = self._solucionador.obtener_iteracion_actual()
             fila_z = iter_act.tableau[0]
             tiene_negativos = any(coef < -1e-9 for coef in fila_z)
 
             if not tiene_negativos and self._solucionador.resuelto:
-                self._btn_siguiente.state(['disabled', 'selected'])
+                self._btn_siguiente.config(state='disabled', bg=BG_BUTTON, disabledforeground='#888888')
             else:
-                self._btn_siguiente.state(['disabled', '!selected'])
+                self._btn_siguiente.config(state='disabled', bg=BG_BUTTON_DISABLED, disabledforeground='#666666')
             # Habilitar botón de sensibilidad si el solucionador no puede avanzar
             # y no está en fase 1 ni es infactible
             if (not self._solucionador.puede_avanzar()) and (not self._solucionador.en_fase_1) and (not self._solucionador.es_infactible):
-                self._btn_sensibilidad.state(['!disabled'])
+                self._btn_sensibilidad.config(state='normal', bg=BG_BUTTON, fg=FG_BUTTON)
             else:
-                self._btn_sensibilidad.state(['disabled'])
+                self._btn_sensibilidad.config(state='disabled', bg=BG_BUTTON_DISABLED, disabledforeground='#666666')
 
     def _on_toggle_sensibilidad(self):
         """Muestra u oculta la vista de sensibilidad (toggle)."""
