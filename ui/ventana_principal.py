@@ -107,22 +107,23 @@ class VentanaPrincipal(tk.Tk):
             borderwidth=1,
             relief="solid",
         )
+        # Se usa un único estilo con 3 estados vía style.map:
+        #   - enabled (sin flags): colores normales
+        #   - disabled (sin selected): fondo oscuro (antes de resolver)
+        #   - disabled + selected: fondo normal, texto gris (óptimo alcanzado)
+        # Esto evita llamar configure(style=...) en tiempo de ejecución,
+        # lo cual causa que los botones desaparezcan en X11 (bug de Tk/clam).
         style.map('Siguiente.TButton',
-            background=[('active', BG_BUTTON_HOVER), ('disabled', BG_BUTTON_DISABLED)],
-            foreground=[('disabled', '#666666')],
-        )
-
-        style.configure('SiguienteSolved.TButton',
-            background=BG_BUTTON,
-            foreground=FG_BUTTON,
-            font=("Consolas", 11, "bold"),
-            padding=(20, 8),
-            borderwidth=1,
-            relief="solid",
-        )
-        style.map('SiguienteSolved.TButton',
-            background=[('active', BG_BUTTON_HOVER), ('disabled', BG_BUTTON)],
-            foreground=[('disabled', '#888888')],
+            background=[
+                ('disabled selected', BG_BUTTON),
+                ('disabled', BG_BUTTON_DISABLED),
+                ('pressed', BG_BUTTON_HOVER),
+                ('active', BG_BUTTON_HOVER),
+            ],
+            foreground=[
+                ('disabled selected', '#888888'),
+                ('disabled', '#666666'),
+            ],
         )
 
         self._btn_siguiente = ttk.Button(
@@ -282,10 +283,14 @@ class VentanaPrincipal(tk.Tk):
             self._actualizar_estado_controles()
 
     def _actualizar_estado_controles(self):
-        """Actualiza el estado de los controles según el solucionador."""
+        """Actualiza el estado de los controles según el solucionador.
+
+        Solo usa state() para cambiar la apariencia, nunca configure(style=...),
+        porque en X11 el tema 'clam' de Tk tiene un bug que al re-aplicar
+        un estilo sobre un ttk.Button ya mapeado lo renderiza invisible.
+        """
         if self._solucionador is None:
-            self._btn_siguiente.state(['disabled'])
-            self._btn_siguiente.configure(style='Siguiente.TButton')
+            self._btn_siguiente.state(['disabled', '!selected'])
             self._lbl_info.config(text="")
             self._btn_sensibilidad.state(['disabled'])
             return
@@ -302,11 +307,10 @@ class VentanaPrincipal(tk.Tk):
         self._lbl_info.config(text=info_text)
 
         # Habilitar/deshabilitar botón según si puede avanzar
-        # ttk.Button maneja colores automáticamente via style.map,
-        # sin bindings <Enter>/<Leave> que causan race conditions en X11.
+        # Los colores se manejan automáticamente via style.map,
+        # sin llamar configure(style=...), evitando el bug de X11.
         if self._solucionador.puede_avanzar():
-            self._btn_siguiente.state(['!disabled'])
-            self._btn_siguiente.configure(style='Siguiente.TButton')
+            self._btn_siguiente.state(['!disabled', '!selected'])
             # Mientras no esté resuelto no permitimos togglear sensibilidad
             self._btn_sensibilidad.state(['disabled'])
         else:
@@ -315,10 +319,9 @@ class VentanaPrincipal(tk.Tk):
             tiene_negativos = any(coef < -1e-9 for coef in fila_z)
 
             if not tiene_negativos and self._solucionador.resuelto:
-                self._btn_siguiente.configure(style='SiguienteSolved.TButton')
+                self._btn_siguiente.state(['disabled', 'selected'])
             else:
-                self._btn_siguiente.configure(style='Siguiente.TButton')
-            self._btn_siguiente.state(['disabled'])
+                self._btn_siguiente.state(['disabled', '!selected'])
             # Habilitar botón de sensibilidad si el solucionador no puede avanzar
             # y no está en fase 1 ni es infactible
             if (not self._solucionador.puede_avanzar()) and (not self._solucionador.en_fase_1) and (not self._solucionador.es_infactible):
