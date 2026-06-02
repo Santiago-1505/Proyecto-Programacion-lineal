@@ -52,12 +52,12 @@ class VentanaPrincipal(tk.Tk):
         self._construir_layout()
 
     def _construir_layout(self):
-        # Usar tema 'clam' para renderizado consistente del Treeview
-        # entre X11 y Wayland.
+        # Única llamada a theme_use en toda la app.
+        # fila_restriccion.py NO debe llamar theme_use (causa re-render global en X11).
         style = ttk.Style()
         style.theme_use('clam')
 
-        # Panel izquierdo: entrada del problema
+        # Panel izquierdo
         self._panel_entrada = PanelEntrada(
             self,
             callback_resolver=self._on_resolver,
@@ -68,35 +68,51 @@ class VentanaPrincipal(tk.Tk):
         # Separador vertical
         tk.Frame(self, width=2, bg="#2d4a6e").pack(side="left", fill="y")
 
-        # Panel derecho con layout vertical
+        # Contenedor derecho
         self._panel_container = tk.Frame(self, bg=BG_DERECHO)
         self._panel_container.pack(side="right", fill="both", expand=True)
 
-        # Dividir contenedor en area de contenido (arriba) y controles (abajo)
+        # ── FIX X11: declarar side="bottom" ANTES que side="top" ──────────────
+        # En tkinter/pack el espacio se asigna en orden de declaración.
+        # Si "top" con expand=True se declara primero, consume todo el espacio
+        # vertical y el frame "bottom" queda con altura 0 en X11.
+        # Declarando "bottom" primero queda anclado con altura garantizada.
+        self._panel_controls_holder = tk.Frame(
+            self._panel_container,
+            bg=BG_DERECHO,
+            height=100,          # altura mínima garantizada
+        )
+        self._panel_controls_holder.pack(side="bottom", fill="x")
+        self._panel_controls_holder.pack_propagate(False)  # no ceder espacio al contenido
+
+        # Separador visual entre tabla y controles
+        tk.Frame(self._panel_container, height=1, bg="#2d4a6e").pack(
+            side="bottom", fill="x"
+        )
+
+        # Content ocupa el resto (top + expand=True), crece hacia arriba
         self._panel_content = tk.Frame(self._panel_container, bg=BG_DERECHO)
         self._panel_content.pack(side="top", fill="both", expand=True)
+        # ── fin FIX ────────────────────────────────────────────────────────────
 
-        self._panel_controls_holder = tk.Frame(self._panel_container, bg=BG_DERECHO)
-        self._panel_controls_holder.pack(side="bottom", fill="x")
-
-        # Panel de resultados inicial dentro del content
+        # Panel de resultados inicial
         self._panel_resultado = PanelResultado(self._panel_content, bg=BG_DERECHO)
         self._panel_resultado.pack(fill="both", expand=True)
 
-        # Panel de controles en la parte inferior del contenedor (use controls holder)
+        # Construir controles dentro del holder ya anclado
         self._construir_panel_controles(self._panel_controls_holder)
 
     def _construir_panel_controles(self, parent):
         """Construye el panel de controles con botones de navegación."""
         panel_controles = tk.Frame(parent, bg="#0a1622", height=80)
-        panel_controles.pack(side="bottom", fill="x", padx=10, pady=10)
+        panel_controles.pack(fill="both", expand=True, padx=10, pady=10)
         panel_controles.pack_propagate(False)
 
-        # Frame interior con más paddings
+        # Frame interior
         frame_interior = tk.Frame(panel_controles, bg="#0a1622")
         frame_interior.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # Fila de información
+        # Etiqueta informativa
         lbl_info = tk.Label(
             frame_interior,
             text="",
@@ -110,10 +126,7 @@ class VentanaPrincipal(tk.Tk):
         # Espaciador
         tk.Frame(frame_interior, bg="#0a1622").pack(side="left", expand=True)
 
-        # Botón "Siguiente Iteración" como tk.Button (no ttk.Button).
-        # ttk.Button con tema 'clam' tiene un bug de renderizado en X11
-        # que lo vuelve invisible al cambiar su estado o estilo.
-        # tk.Button usa dibujo nativo de X11 y no sufre este problema.
+        # Botón Siguiente Iteración — tk.Button (no ttk) para evitar bug X11
         self._btn_siguiente = tk.Button(
             frame_interior,
             text="Siguiente Iteración  ▶",
@@ -133,7 +146,7 @@ class VentanaPrincipal(tk.Tk):
         self._btn_siguiente.config(state='disabled')
         _hover(self._btn_siguiente, BG_BUTTON, BG_BUTTON_HOVER)
 
-        # Botón para mostrar/ocultar Análisis de Sensibilidad (inicialmente oculto)
+        # Botón Análisis de Sensibilidad
         self._sensibilidad_visible = False
         self._sensibilidad_cache = None
         self._btn_sensibilidad = tk.Button(
@@ -158,34 +171,28 @@ class VentanaPrincipal(tk.Tk):
     def _on_resolver(self, objetivo: str, tipo_obj: str, restricciones, metodo: str = 'gran_m'):
         """Callback recibido desde PanelEntrada al pulsar Resolver."""
         try:
-            # Mostrar información en consola (para debugging)
             print("=" * 60)
             print(f"Objetivo ({tipo_obj.upper()}): Z = {objetivo}")
             print("Restricciones:")
             for r in restricciones:
                 print(f"  {r}")
             print("=" * 60)
-            
+
             if metodo == 'grafico':
-                # Renderizar método gráfico (sólo para 2 variables)
                 try:
                     from core.graphical_solver import solve_graphical
                 except Exception as e:
-                    # Problema con el módulo de resolución gráfica
                     messagebox.showerror("Error", f"No se puede cargar el motor gráfico: {e}")
                     return
 
-                # Validar y resolver (solve_graphical lanzará ValueError si >2)
                 try:
                     result = solve_graphical(objetivo, tipo_obj, restricciones, include_nonnegativity=True)
                 except ValueError:
-                    # Re-lanzar para ser capturado por except ValueError externo
                     raise
                 except Exception as e:
                     messagebox.showerror("Error", f"Error al calcular la solución gráfica: {e}")
                     return
 
-                # Intentar importar UI gráfico (matplotlib puede faltar)
                 try:
                     from ui.panel_grafico import PanelGrafico
                 except ImportError:
@@ -195,40 +202,34 @@ class VentanaPrincipal(tk.Tk):
                     )
                     return
 
-                # destruir contenido previo del content frame y colocar panel gráfico
                 for child in list(self._panel_content.winfo_children()):
                     child.destroy()
                 self._panel_resultado = PanelGrafico(self._panel_content, bg=BG_DERECHO)
                 self._panel_resultado.pack(fill="both", expand=True)
-                # render puede lanzar excepciones; manejar para no romper la UI
                 try:
                     self._panel_resultado.render(result)
                 except Exception as e:
                     messagebox.showerror("Error gráfico", f"Error al renderizar el gráfico: {e}")
                     return
-                # Disable simplex controls
                 self._solucionador = None
                 self._actualizar_estado_controles()
             else:
-                # Construir primera iteración y usar SolucionadorSimplex (Gran M)
                 constructor = ConstructorPrimerIteracion()
                 iteracion_inicial = constructor.construir_tableau_inicial(
                     objetivo=objetivo,
                     tipo_optimizacion=tipo_obj,
                     restricciones=restricciones
                 )
-                # Crear solucionador
                 es_minimizacion = (tipo_obj.lower() == "min")
                 self._solucionador = SolucionadorSimplex(iteracion_inicial, es_minimizacion)
-                # Mostrar primera iteración (limpiar content frame y crear panel)
+
                 for child in list(self._panel_content.winfo_children()):
                     child.destroy()
                 self._panel_resultado = PanelResultado(self._panel_content, bg=BG_DERECHO)
                 self._panel_resultado.pack(fill="both", expand=True)
                 self._panel_resultado.mostrar_iteracion(iteracion_inicial)
-                # Actualizar estado de botón
                 self._actualizar_estado_controles()
-            
+
         except ValueError as e:
             messagebox.showerror("Error de validación", str(e))
         except Exception as e:
@@ -246,55 +247,38 @@ class VentanaPrincipal(tk.Tk):
         try:
             if not self._solucionador.puede_avanzar():
                 valor_z = self._solucionador.obtener_valor_objetivo()
-
                 mensaje = (
                     "✓ Se alcanzó la solución óptima\n\n"
                     f"Valor de Z: {valor_z:.4f}\n\n"
                     "El botón será deshabilitado ahora."
                 )
                 messagebox.showinfo("Solución óptima alcanzada", mensaje)
-                # Asegurar que el estado visual de los controles se actualice
                 self._actualizar_estado_controles()
-
-                # Calcular y mostrar análisis de sensibilidad (no intrusivo en UI)
                 try:
                     sensibilidad = calcular_sensibilidad(self._solucionador)
                     self._sensibilidad_cache = sensibilidad
                     self._sensibilidad_visible = True
                     self._panel_resultado.mostrar_sensibilidad(sensibilidad)
                 except Exception as e:
-                    # Mostrar mensaje no intrusivo si análisis no es aplicable
                     print(f"Análisis de sensibilidad no disponible: {e}")
                 return
 
-            # Avanzar a siguiente iteración
             self._solucionador.siguiente_iteracion()
-
-            # Mostrar nueva iteración
             iter_nueva = self._solucionador.obtener_iteracion_actual()
             self._panel_resultado.mostrar_iteracion(iter_nueva)
-
-            # Actualizar controles
             self._actualizar_estado_controles()
-            
+
         except RuntimeError as e:
             messagebox.showerror("Error de resolución", f"Problema: {str(e)}")
-            # Asegurar actualización del estado de controles tras error
             self._actualizar_estado_controles()
         except Exception as e:
             messagebox.showerror("Error inesperado", str(e))
             import traceback
             traceback.print_exc()
-            # También actualizar controles en caso de excepción inesperada
             self._actualizar_estado_controles()
 
     def _actualizar_estado_controles(self):
-        """Actualiza el estado de los controles según el solucionador.
-
-        Usa config(state=...) de tk.Button (no state() de ttk),
-        porque ttk.Button con tema 'clam' tiene un bug en X11 que lo
-        vuelve invisible al cambiar su estado dinámicamente.
-        """
+        """Actualiza el estado visual de los botones según el solucionador."""
         if self._solucionador is None:
             self._btn_siguiente.config(state='disabled', bg=BG_BUTTON_DISABLED, disabledforeground='#666666')
             self._lbl_info.config(text="")
@@ -302,9 +286,6 @@ class VentanaPrincipal(tk.Tk):
             return
 
         iter_actual = self._solucionador.obtener_iteracion_actual()
-        
-        # Actualizar etiqueta informativa
-        num_iters = len(self._solucionador.iteraciones)
         info_text = (
             f"Iteración {iter_actual.numero_iteracion} | "
             f"{iter_actual.obtener_num_restricciones()} restricciones, "
@@ -312,10 +293,8 @@ class VentanaPrincipal(tk.Tk):
         )
         self._lbl_info.config(text=info_text)
 
-        # Habilitar/deshabilitar botón según si puede avanzar
         if self._solucionador.puede_avanzar():
             self._btn_siguiente.config(state='normal', bg=BG_BUTTON, fg=FG_BUTTON)
-            # Mientras no esté resuelto no permitimos togglear sensibilidad
             self._btn_sensibilidad.config(state='disabled', bg=BG_BUTTON_DISABLED, disabledforeground='#666666')
         else:
             iter_act = self._solucionador.obtener_iteracion_actual()
@@ -326,8 +305,7 @@ class VentanaPrincipal(tk.Tk):
                 self._btn_siguiente.config(state='disabled', bg=BG_BUTTON, disabledforeground='#888888')
             else:
                 self._btn_siguiente.config(state='disabled', bg=BG_BUTTON_DISABLED, disabledforeground='#666666')
-            # Habilitar botón de sensibilidad si el solucionador no puede avanzar
-            # y no está en fase 1 ni es infactible
+
             if (not self._solucionador.puede_avanzar()) and (not self._solucionador.en_fase_1) and (not self._solucionador.es_infactible):
                 self._btn_sensibilidad.config(state='normal', bg=BG_BUTTON, fg=FG_BUTTON)
             else:
@@ -337,7 +315,6 @@ class VentanaPrincipal(tk.Tk):
         """Muestra u oculta la vista de sensibilidad (toggle)."""
         if self._solucionador is None:
             return
-        # Si no hay cache, intentar calcular
         if not self._sensibilidad_cache:
             try:
                 sensibilidad = calcular_sensibilidad(self._solucionador)
@@ -347,7 +324,6 @@ class VentanaPrincipal(tk.Tk):
                 return
 
         if self._sensibilidad_visible:
-            # Ocultar
             try:
                 self._panel_resultado.ocultar_sensibilidad()
             except Exception:
@@ -355,7 +331,6 @@ class VentanaPrincipal(tk.Tk):
             self._sensibilidad_visible = False
             self._btn_sensibilidad.config(text="Mostrar Sensibilidad")
         else:
-            # Mostrar
             try:
                 self._panel_resultado.mostrar_sensibilidad(self._sensibilidad_cache)
             except Exception as e:
