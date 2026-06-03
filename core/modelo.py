@@ -113,6 +113,7 @@ class Iteracion:
     variables_basicas: list[Variable]
     terminos_independientes: list[float]  # vector b
     nombres_variables_todas: list[Variable] = field(default_factory=list)
+    coeficientes_objetivo_originales: list[float] = field(default_factory=list)
     
     # Metadatos de pivotaje para visualización (solo en iteraciones posteriores a la 1ª)
     columna_pivote: int = -1

@@ -121,11 +121,9 @@ def calcular_sensibilidad(solver: SolucionadorSimplex) -> Dict[str, List[Dict]]:
     # Número de variables de decisión (primeras columnas con tipo DECISION)
     num_decision = sum(1 for v in nombres if v.tipo == TipoVariable.DECISION)
 
-    # Construir vector c (coeficientes originales de la función objetivo) desde iter_init.fila Z
-    fila_z_init = iter_init.tableau[0]
-    sign = 1.0 if solver.es_minimizacion else -1.0
-    # Según construcción: para max fila_z = -c, para min fila_z = +c
-    c = [sign * fila_z_init[j] for j in range(ncols)]
+    # Usar coeficientes originales de la función objetivo (pre-canonicalización, sin M).
+    # Gran M almacenó estos coeficientes en la iteración inicial antes de la canonicalización.
+    c = iter_init.coeficientes_objetivo_originales
 
     # c_B: coeficientes objetivo de variables básicas (en el orden de B)
     c_B = [c[col] for col in basis_cols]
@@ -147,11 +145,16 @@ def calcular_sensibilidad(solver: SolucionadorSimplex) -> Dict[str, List[Dict]]:
         cBj = sum(cb * bj for cb, bj in zip(c_B, beta_j))
         r_j = c[j] - cBj
 
-        # Si j no es básica -> simple bound Δ ≤ -r_j
+        # Si j no es básica
         if j not in basis_cols:
-            # Δ in (-inf, -r_j]
-            lower = None
-            upper = -r_j
+            if solver.es_minimizacion:
+                # MIN: r_j + Δ ≥ 0 → Δ ≥ -r_j (cota inferior)
+                lower = -r_j
+                upper = None
+            else:
+                # MAX: r_j + Δ ≤ 0 → Δ ≤ -r_j (cota superior)
+                lower = None
+                upper = -r_j
             rango = (lower, upper)
             resultado_obj.append({
                 'parametro': str(nombres[j]),
@@ -168,25 +171,39 @@ def calcular_sensibilidad(solver: SolucionadorSimplex) -> Dict[str, List[Dict]]:
         for k in range(ncols):
             if k in basis_cols:
                 continue
+            if nombres[k].tipo == TipoVariable.ARTIFICIAL:
+                continue
             A_k = A_cols[k]
             beta_k = _mat_vec_mul(B_inv, A_k)
             # r_k viejo
             cBk = sum(cb * bk for cb, bk in zip(c_B, beta_k))
             r_k = c[k] - cBk
             alpha_k = beta_k[p]
-            # Inequality: r_k - Δ * alpha_k ≤ 0  =>  Δ * alpha_k ≥ r_k
+            # Optimalidad: para MAX r_k ≤ 0, para MIN r_k ≥ 0.
+            # Al cambiar c_j (básica) en Δ, r_k → r_k - Δ·α_k.
+            # MAX: r_k - Δ·α_k ≤ 0  →  Δ·α_k ≥ r_k
+            # MIN: r_k - Δ·α_k ≥ 0  →  Δ·α_k ≤ r_k
             if abs(alpha_k) < TOL:
-                # No restricción sobre Δ (a menos que r_k > 0, lo cual indicaría que la base no es óptima)
                 continue
             bound = r_k / alpha_k
-            if alpha_k > 0:
-                # Δ ≥ bound
-                if lower_delta is None or bound > lower_delta:
-                    lower_delta = bound
+            if solver.es_minimizacion:
+                if alpha_k > 0:
+                    # Δ ≤ bound (cota superior)
+                    if upper_delta is None or bound < upper_delta:
+                        upper_delta = bound
+                else:
+                    # Δ ≥ bound (cota inferior)
+                    if lower_delta is None or bound > lower_delta:
+                        lower_delta = bound
             else:
-                # alpha_k < 0 -> Δ ≤ bound
-                if upper_delta is None or bound < upper_delta:
-                    upper_delta = bound
+                if alpha_k > 0:
+                    # Δ ≥ bound (cota inferior)
+                    if lower_delta is None or bound > lower_delta:
+                        lower_delta = bound
+                else:
+                    # Δ ≤ bound (cota superior)
+                    if upper_delta is None or bound < upper_delta:
+                        upper_delta = bound
 
         # Convertir Δ a rango de c_j: [c_j + lower_delta, c_j + upper_delta]
         lo = None if lower_delta is None else c[j] + lower_delta

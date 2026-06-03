@@ -79,6 +79,14 @@ class ConstructorPrimerIteracion:
             variables_agregadas
         )
         
+        # Guardar coeficientes originales de la función objetivo (pre-canonicalización, sin M).
+        # Decision vars: +c (MIN) o -c (MAX) en fila_z → original c_j = sign_obj * fila_z[j]
+        # Slack/exceso/artificial: 0 (no existen en el objetivo original)
+        sign_obj = 1.0 if tipo_optimizacion == "min" else -1.0
+        coef_originales = [0.0] * len(fila_z)
+        for j in range(self.num_variables_decision):
+            coef_originales[j] = sign_obj * fila_z[j]
+        
         # Combinar tableau: fila Z + matriz de restricciones
         tableau = [fila_z] + matriz_restricciones
         
@@ -119,7 +127,8 @@ class ConstructorPrimerIteracion:
             tableau=tableau,
             variables_basicas=variables_basicas,
             terminos_independientes=terminos_ind_completo,
-            nombres_variables_todas=nombres_variables
+            nombres_variables_todas=nombres_variables,
+            coeficientes_objetivo_originales=coef_originales,
         )
 
         # Validar consistencia básica antes de retornar
