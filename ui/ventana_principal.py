@@ -227,7 +227,7 @@ class VentanaPrincipal(tk.Tk):
                     child.destroy()
                 self._panel_resultado = PanelResultado(self._panel_content, bg=BG_DERECHO)
                 self._panel_resultado.pack(fill="both", expand=True)
-                self._panel_resultado.mostrar_iteracion(iteracion_inicial)
+                self._panel_resultado.mostrar_iteracion(iteracion_inicial, es_minimizacion=es_minimizacion)
                 self._actualizar_estado_controles()
 
         except ValueError as e:
@@ -265,7 +265,7 @@ class VentanaPrincipal(tk.Tk):
 
             self._solucionador.siguiente_iteracion()
             iter_nueva = self._solucionador.obtener_iteracion_actual()
-            self._panel_resultado.mostrar_iteracion(iter_nueva)
+            self._panel_resultado.mostrar_iteracion(iter_nueva, es_minimizacion=self._solucionador.es_minimizacion)
             self._actualizar_estado_controles()
 
         except RuntimeError as e:

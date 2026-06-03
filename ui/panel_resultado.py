@@ -119,7 +119,7 @@ class PanelResultado(tk.Frame):
 
     # ── API pública ────────────────────────────────────────────────────────────
 
-    def mostrar_iteracion(self, iteracion: Iteracion):
+    def mostrar_iteracion(self, iteracion: Iteracion, es_minimizacion: bool = False):
         """Muestra una iteración del simplex en el panel."""
         self._iteracion_actual = iteracion
 
@@ -131,8 +131,8 @@ class PanelResultado(tk.Frame):
             )
         )
 
-        datos = FormateadorTableau.obtener_datos_tabla(iteracion)
-        self._tabla.cargar_iteracion(iteracion)
+        datos = FormateadorTableau.obtener_datos_tabla(iteracion, es_minimizacion)
+        self._tabla.cargar_iteracion(iteracion, es_minimizacion)
 
         if (
             iteracion.numero_iteracion > 1

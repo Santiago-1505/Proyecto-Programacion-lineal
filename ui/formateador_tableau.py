@@ -51,9 +51,14 @@ class FormateadorTableau:
         return nombres
     
     @staticmethod
-    def obtener_datos_tabla(iteracion: Iteracion) -> dict:
+    def obtener_datos_tabla(iteracion: Iteracion, es_minimizacion: bool = False) -> dict:
         """
         Prepara datos completos para mostrar el tableau.
+        
+        Args:
+            iteracion: Iteración a mostrar
+            es_minimizacion: Si es True, el RHS de la fila Z se niega porque
+                             internamente almacena -Z (MAX -c·x para minimización).
         
         Returns:
             Dict con:
@@ -75,6 +80,13 @@ class FormateadorTableau:
         
         # Vector b formateado
         terminos_ind = FormateadorTableau.formatear_fila(iteracion.terminos_independientes)
+        
+        # Para minimización, el RHS de Z almacena -Z (MAX -c·x).
+        # Se corrige el signo para que el usuario vea Z en lugar de -Z.
+        if es_minimizacion:
+            terminos_ind[0] = FormateadorTableau.formatear_coeficiente(
+                -iteracion.terminos_independientes[0]
+            )
         
         # Variables básicas
         variables_basicas = [str(var) for var in iteracion.variables_basicas]

@@ -105,12 +105,13 @@ class TablaSimplex(ttk.Treeview):
         self.tag_configure("razon_minima", background=COLOR_RAZON_MINIMA, foreground="white", font=("Consolas", 11, "bold"))
         self.tag_configure("elemento_pivote", background=COLOR_ELEMENTO_PIVOTE, foreground="white", font=("Consolas", 11, "bold"))
     
-    def cargar_iteracion(self, iteracion: Iteracion):
+    def cargar_iteracion(self, iteracion: Iteracion, es_minimizacion: bool = False):
         """
         Carga una iteración del tableau en la tabla.
         
         Args:
             iteracion: Objeto Iteracion con los datos
+            es_minimizacion: Si es True, el RHS de Z se corrige de signo
         """
         self._iteracion_actual = iteracion
         
@@ -119,7 +120,7 @@ class TablaSimplex(ttk.Treeview):
             self.delete(item)
         
         # Obtener datos formateados
-        datos = FormateadorTableau.obtener_datos_tabla(iteracion)
+        datos = FormateadorTableau.obtener_datos_tabla(iteracion, es_minimizacion)
         
         # Configurar columnas: Fila | Variables | b | Razones (si corresponde)
         columnas = ["Fila"] + datos["encabezados"] + ["b"]
