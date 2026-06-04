@@ -34,6 +34,7 @@
               ruff
               basedpyright
 							dev-script
+							tree
             ];
 
           };
